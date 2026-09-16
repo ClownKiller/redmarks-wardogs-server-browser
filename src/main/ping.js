@@ -25,8 +25,17 @@ const DATA_CENTRES = {
   'na-north': 'dynamodb.ca-central-1.amazonaws.com',    // Montreal
   'sa': 'dynamodb.sa-east-1.amazonaws.com',             // Sao Paulo
   'asia-east': 'dynamodb.ap-northeast-1.amazonaws.com', // Tokyo
+  'asia-southeast': 'dynamodb.ap-southeast-1.amazonaws.com', // Singapore
   'asia-west': 'dynamodb.ap-south-1.amazonaws.com',     // Mumbai
   'oce': 'dynamodb.ap-southeast-2.amazonaws.com',       // Sydney
+};
+
+// Region ids the server list actually uses (seen on wardogservers.com).
+const EXACT = {
+  'asia-east': 'asia-east', 'asia-southeast': 'asia-southeast', 'asia-west': 'asia-west',
+  'eu-central': 'eu-central', 'eu-east': 'eu-east', 'eu-south': 'eu-south', 'eu-west': 'eu-west',
+  'na-central': 'na-central', 'na-east': 'na-east', 'na-north': 'na-north', 'na-west': 'na-west',
+  'oceania': 'oce', 'south-america': 'sa',
 };
 
 const CACHE_MS = 5 * 60 * 1000;
@@ -39,10 +48,12 @@ const cache = new Map(); // group -> { ms, at }
  */
 function regionGroup(code) {
   const c = String(code || '').toLowerCase();
+  if (EXACT[c]) return EXACT[c];
   const has = (...words) => words.some((w) => c.includes(w));
   if (has('oce', 'au', 'nz', 'sydney')) return 'oce';
   if (has('sa', 'south-america', 'br', 'latam') && !has('asia', 'usa')) return 'sa';
   if (has('asia', 'as-', 'ap-', 'jp', 'sg', 'kr')) {
+    if (has('southeast', 'sg')) return 'asia-southeast';
     if (has('west', 'south', 'in', 'me')) return 'asia-west';
     return 'asia-east';
   }

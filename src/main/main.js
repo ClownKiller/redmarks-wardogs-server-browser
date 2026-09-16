@@ -2,14 +2,14 @@
 /*
  * RedMarks Wardogs Server Browser - main process
  *
- * What this app does:     shows WARDOGS server info from wardogserverlist.com.
+ * What this app does:     shows WARDOGS server info from wardogservers.com (public API).
  * What this app never does: open, read, or change game files; read game memory;
  *                         inject overlays; talk to Bulkhead's or Steam's servers.
  */
 
 const { app, BrowserWindow, ipcMain, shell, net, clipboard } = require('electron');
 const path = require('path');
-const { WardogsApi } = require('./api');
+const { WardogsApi, cleanCode, isJoinCode } = require('./api');
 const { Store } = require('./store');
 const ping = require('./ping');
 
@@ -22,11 +22,11 @@ const REPO_URL = 'https://github.com/ClownKiller/redmarks-wardogs-server-browser
 // shortcut does. Nothing about the game itself is touched.
 const STEAM_APP_ID = '1867240';
 const STEAM_LAUNCH_URL = `steam://rungameid/${STEAM_APP_ID}`;
-const JOIN_CODE_PATTERN = /^[A-Za-z0-9-]{1,40}$/;
+
 const USER_AGENT = `RedMarksWardogsServerBrowser/${pkg.version} (+${REPO_URL})`;
 
 // Only these sites may be opened in the user's web browser from inside the app.
-const EXTERNAL_ALLOWED = ['wardogserverlist.com', 'github.com'];
+const EXTERNAL_ALLOWED = ['wardogservers.com', 'github.com'];
 
 let win = null;
 let api = null;
@@ -96,7 +96,9 @@ function openExternalSafe(url) {
 // ---------- argument checks (the screen is treated as untrusted input) ----------
 
 const str = (v, max = 200) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : undefined);
-const win3 = (v) => (['24h', '7d', '30d'].includes(v) ? v : undefined);
+const oneOf = (list) => (v) => (list.includes(v) ? v : undefined);
+const serverWindow = oneOf(['24h', '7d', '30d', '90d']);
+const seriesGroup = oneOf(['total', 'type', 'region']);
 
 /** Wrap a handler so errors come back as { ok:false, error } instead of crashing. */
 function handle(channel, fn) {
@@ -112,17 +114,18 @@ function handle(channel, fn) {
 function registerHandlers() {
   handle('app:info', async () => ({ version: pkg.version, repo: REPO_URL }));
 
-  handle('api:server', async (a) => api.getServer({ key: str(a.key), code: str(a.code, 40) }));
-  handle('api:leaderboard', async () => api.getLeaderboard());
-  handle('api:detail', async (a) => api.getServerDetail({ key: str(a.key), id: str(a.id), window: win3(a.window) }));
-  handle('api:totals', async (a) => api.getTotals(win3(a.window)));
-  handle('api:regions', async (a) => api.getRegionHistory(win3(a.window)));
-  handle('api:builds', async () => api.getBuilds());
+  handle('api:snapshot', async () => api.getSnapshot());
+  handle('api:server', async (a) => api.getServer(str(a.code, 80)));
+  handle('api:history', async (a) => api.getServerHistory(str(a.code, 80), serverWindow(a.window)));
+  handle('api:series', async (a) => api.getSeries(seriesGroup(a.group), '24h'));
+  handle('api:find', async (a) => api.findServer(str(a.code, 80)));
+  handle('code:clean', async (a) => ({ code: cleanCode(str(a.code, 80) || '') }));
 
   handle('ping:region', async (a) => ({ region: str(a.region, 40), ms: await ping.estimate(str(a.region, 40)) }));
 
   handle('fav:list', async () => ({ favourites: store.listFavourites() }));
   handle('fav:add', async (a) => ({ favourites: store.addFavourite({ key: str(a.key), name: a.name, region: a.region, official: a.official }) }));
+  handle('fav:replace', async (a) => ({ favourites: store.replaceFavourite(str(a.oldKey), { key: str(a.key), name: a.name, region: a.region, official: a.official }) }));
   handle('fav:remove', async (a) => ({ favourites: store.removeFavourite(str(a.key)) }));
   handle('fav:touch', async (a) => { store.touchFavourite(str(a.key), a.name, a.region); return {}; });
 
@@ -130,7 +133,7 @@ function registerHandlers() {
   handle('settings:save', async (a) => ({ settings: store.saveSettings(a) }));
 
   handle('game:join', async (a) => {
-    const code = typeof a.code === 'string' && JOIN_CODE_PATTERN.test(a.code) ? a.code : null;
+    const code = isJoinCode(a.code) ? a.code : null;
     if (!code) throw new Error('This server has no usable join code.');
     clipboard.writeText(code);
     if (!store.getSettings().launchGame) return { launched: false, code };
@@ -142,7 +145,7 @@ function registerHandlers() {
     return { launched: true, code };
   });
 
-  handle('clipboard:write', async (a) => { clipboard.writeText(str(a.text, 60) || ''); return {}; });
+  handle('clipboard:write', async (a) => { clipboard.writeText(str(a.text, 80) || ''); return {}; });
   handle('link:open', async (a) => { openExternalSafe(str(a.url, 500)); return {}; });
 
   handle('window:minimize', async () => { if (win) win.minimize(); return {}; });

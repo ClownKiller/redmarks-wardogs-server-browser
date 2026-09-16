@@ -1,24 +1,25 @@
 # RedMarks Wardogs Server Browser
 
-A Windows server browser for **WARDOGS**: see top community servers, track your favourites, check who's online, and see which map a server is on, how full it is, and a ping estimate for its region.
+A Windows server browser for **WARDOGS**: browse every official and community server, see which map each is on and how full it is, track your favourites, and jump in with one click.
 
 ## What it does
 
-- **Top 100:** the most popular community servers over the last 7 days. Star any to track it.
-- **Favourites:** add servers by their in-game join code and watch them live: map, mode, players, full or empty, password lock.
-- **Regions:** players online in each region, a 24-hour trend, and your ping estimate to each one.
-- **Details:** live info, join code with a copy button, player history (24 hours, 7 days, 30 days), uptime, and maps played.
+- **Servers:** switch between **Official** and **Community** to see every server live: map, mode, region, players, full or empty, password lock, and ping estimate. Search, filter by region, and hide full, empty or locked servers.
+- **Join:** copies the server's join code and starts WARDOGS through Steam. Paste the code (Ctrl+V) in the in-game server browser. WARDOGS has no official direct-join link yet.
+- **Favourites:** star any server, or add one by its join code. Join codes don't change when a server restarts, so favourites keep working.
+- **Regions:** players and servers in each region, a 24-hour trend, and your ping estimate to each one.
+- **Details:** live info, join code with a copy button, level and cash limits, player history (24 hours to 90 days), uptime, and maps played.
 - **Refreshes every 5 minutes** (or 10 or 15, set in Settings).
 
 ## Safe by design
 
 - The app **never** opens, reads or changes WARDOGS game files, never reads game memory, and never runs inside the game.
-- It never contacts Bulkhead's or Steam's servers.
-- Server data comes from the free public API at [wardogserverlist.com](https://wardogserverlist.com/api), used within its rules: at most 20 requests a minute (the limit is 60), with caching, and it backs off if asked to slow down.
+- It never contacts Bulkhead's servers. The only Steam action is starting WARDOGS when you click Join, like a desktop shortcut.
+- Server data comes from the free public [Wardog Servers API](https://wardogservers.com/devs), used as its owner asks: the whole list is downloaded once per refresh and filtered in the app, unchanged data is skipped, and requests are limited to 20 a minute.
 - **Ping is an estimate.** Server addresses aren't public, so the app times a normal HTTPS connection to a large data centre in each region.
 - Favourites and settings are saved in `%APPDATA%\RedMarks Wardogs Server Browser\`.
 
-Not affiliated with Bulkhead or wardogserverlist.com.
+Server data: [Wardog Servers](https://wardogservers.com/). Not affiliated with Bulkhead, Team17 or Wardog Servers.
 
 ## Install
 
@@ -44,9 +45,9 @@ If the run shows a red cross, open it, click the failed step, and send a screens
 | `scripts/copy-assets.js` | Copies the fonts and icons into the app during the build |
 | `src/main/main.js` | Starts the app window and handles its security |
 | `src/main/preload.js` | The fixed list of actions the screen may request |
-| `src/main/api.js` | Talks to wardogserverlist.com (rate limit and cache) |
+| `src/main/api.js` | Talks to the Wardog Servers API (cache, rate limit, join-code checks) |
 | `src/main/ping.js` | Region ping estimate |
-| `src/main/store.js` | Saves favourites and settings |
+| `src/main/store.js` | Saves favourites (by join code) and settings |
 | `src/renderer/index.html` | Window layout |
 | `src/renderer/styles.css` | Colours, fonts and look (edit here to re-skin) |
 | `src/renderer/app.js` | Tabs, tables, filters and refresh timer |

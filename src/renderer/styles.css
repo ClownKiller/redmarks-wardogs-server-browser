@@ -178,6 +178,13 @@ table.list { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--orange); flex-shrink: 0; }
 .check small { display: block; font-size: 14px; font-weight: 400; color: var(--grey); margin-top: 3px; }
 
+/* ---------- server list extras ---------- */
+.list-head { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 0 6px; }
+.more-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.name-cell .badge { margin-left: 2px; }
+.info.wide { grid-column: 1 / -1; }
+.info.wide .code { font-size: 18px; }
+
 /* ---------- empty / error messages ---------- */
 .empty { text-align: center; padding: 48px 20px; color: var(--grey); }
 .empty .ti { font-size: 40px; color: var(--orange); display: block; margin-bottom: 10px; }
@@ -219,6 +226,11 @@ table.list { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .chart .axis-label { fill: var(--dim); font-size: 14px; font-family: var(--font); }
 .chart .line { fill: none; stroke: var(--orange); stroke-width: 2; }
 .chart .area { fill: var(--orange); opacity: 0.12; }
+.chart .line.alt { stroke: var(--grey); stroke-dasharray: 5 4; stroke-width: 1.5; }
+.legend { display: flex; gap: 18px; font-size: 14px; color: var(--grey); margin-bottom: 4px; }
+.legend .key { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 18px; height: 3px; background: var(--orange); }
+.swatch.alt { background: var(--grey); }
 .chart .cursor { stroke: var(--grey); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart .dot { fill: var(--orange); }
 .chart-readout { font-size: 15px; color: var(--grey); min-height: 22px; }

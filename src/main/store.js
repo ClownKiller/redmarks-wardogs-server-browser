@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   refreshMinutes: 5,       // 5, 10 or 15 - never faster than 5
   hidePassworded: false,
   onlyWithSpace: false,
+  hideEmpty: false,
   launchGame: true,        // Join button also starts WARDOGS through Steam
 };
 
@@ -55,6 +56,11 @@ class Store {
     return Array.isArray(list) ? list.filter((f) => f && typeof f.key === 'string') : [];
   }
 
+  /*
+   * Since 1.1.0 a favourite's key is the server's join code, which stays the
+   * same across restarts. Favourites saved by 1.0.x used a different key
+   * (it contains "|"); the screen tries to upgrade those with replaceFavourite().
+   */
   addFavourite({ key, name, region, official }) {
     if (typeof key !== 'string' || !key || key.length > 200) throw new Error('That server has no usable key.');
     const list = this.listFavourites();
@@ -75,6 +81,26 @@ class Store {
 
   removeFavourite(key) {
     const list = this.listFavourites().filter((f) => f.key !== key);
+    this.favFile.write(list);
+    return list;
+  }
+
+  /** Swap an old-style favourite for its join-code version, keeping its place. */
+  replaceFavourite(oldKey, { key, name, region, official }) {
+    if (typeof key !== 'string' || !key || key.length > 200) throw new Error('That server has no usable key.');
+    const list = this.listFavourites();
+    const i = list.findIndex((f) => f.key === oldKey);
+    if (i < 0) return list;
+    if (list.some((f) => f.key === key)) list.splice(i, 1); // already saved under its code
+    else {
+      list[i] = {
+        key,
+        name: String(name || list[i].name || '').slice(0, 120),
+        region: String(region || list[i].region || '').slice(0, 40),
+        official: Boolean(official),
+        addedAt: list[i].addedAt || Date.now(),
+      };
+    }
     this.favFile.write(list);
     return list;
   }
@@ -101,6 +127,7 @@ class Store {
     s.homeRegion = typeof s.homeRegion === 'string' ? s.homeRegion.slice(0, 40) : '';
     s.hidePassworded = Boolean(s.hidePassworded);
     s.onlyWithSpace = Boolean(s.onlyWithSpace);
+    s.hideEmpty = Boolean(s.hideEmpty);
     s.launchGame = Boolean(s.launchGame);
     return s;
   }

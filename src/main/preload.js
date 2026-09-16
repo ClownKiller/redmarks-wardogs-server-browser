@@ -13,17 +13,18 @@ const call = (channel) => (arg) => ipcRenderer.invoke(channel, arg);
 contextBridge.exposeInMainWorld('rm', {
   appInfo: call('app:info'),
 
-  server: call('api:server'),          // { key } or { code }
-  leaderboard: call('api:leaderboard'),
-  detail: call('api:detail'),          // { key | id, window }
-  totals: call('api:totals'),          // { window }
-  regions: call('api:regions'),        // { window }
-  builds: call('api:builds'),
+  snapshot: call('api:snapshot'),      // every server right now
+  server: call('api:server'),          // { code } live detail
+  history: call('api:history'),        // { code, window }
+  series: call('api:series'),          // { group: 'type' | 'region' }
+  find: call('api:find'),              // { code } server that may be offline
+  cleanCode: call('code:clean'),       // { code } -> tidied join code
 
   pingRegion: call('ping:region'),     // { region }
 
   favList: call('fav:list'),
   favAdd: call('fav:add'),             // { key, name, region, official }
+  favReplace: call('fav:replace'),     // { oldKey, key, name, region, official }
   favRemove: call('fav:remove'),       // { key }
   favTouch: call('fav:touch'),         // { key, name, region }
 

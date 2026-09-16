@@ -34,7 +34,8 @@
 
   /**
    * Full chart with axes and a hover readout.
-   * opts: { readout: HTMLElement, unit: 'players', yMax: number }
+   * opts: { readout: HTMLElement, unit: 'players', yMax: number,
+   *         compare: second series drawn in grey, compareUnit: label for it }
    */
   function line(container, rawPoints, opts) {
     opts = opts || {};
@@ -56,7 +57,8 @@
     const t0 = points[0][0];
     const t1 = points[points.length - 1][0];
     const span = Math.max(t1 - t0, 1);
-    const yMax = opts.yMax || niceMax(Math.max(...points.map((p) => p[1])));
+    const compare = clean(opts.compare);
+    const yMax = opts.yMax || niceMax(Math.max(...points.map((p) => p[1]), ...compare.map((p) => p[1])));
     const x = (t) => pad.l + ((t - t0) / span) * (W - pad.l - pad.r);
     const y = (v) => pad.t + (1 - v / yMax) * (H - pad.t - pad.b);
 
@@ -78,6 +80,16 @@
     const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
     svg.appendChild(svgEl('path', { class: 'area', d: `${d}L${x(t1).toFixed(1)},${y(0)}L${x(t0).toFixed(1)},${y(0)}Z` }));
     svg.appendChild(svgEl('path', { class: 'line', d }));
+    if (compare.length > 1) {
+      const inRange = compare.filter((p) => p[0] >= t0 && p[0] <= t1);
+      const d2 = inRange.map((p, i) => `${i ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join('');
+      if (d2) svg.appendChild(svgEl('path', { class: 'line alt', d: d2 }));
+    }
+    const nearest = (list, t) => {
+      let best = null;
+      for (const p of list) if (!best || Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p;
+      return best;
+    };
 
     const cursor = svgEl('line', { class: 'cursor', y1: pad.t, y2: H - pad.b, visibility: 'hidden' });
     const dot = svgEl('circle', { class: 'dot', r: 4, visibility: 'hidden' });
@@ -89,7 +101,9 @@
     const showDefault = () => {
       if (!readout) return;
       const last = points[points.length - 1];
-      readout.textContent = `Latest: ${Math.round(last[1]).toLocaleString()} ${unit}`;
+      const lastAlt = compare.length ? compare[compare.length - 1] : null;
+      readout.textContent = `Latest: ${Math.round(last[1]).toLocaleString()} ${unit}` +
+        (lastAlt ? `, ${Math.round(lastAlt[1]).toLocaleString()} ${opts.compareUnit || ''}` : '');
     };
     showDefault();
 
@@ -104,7 +118,9 @@
       cursor.setAttribute('visibility', 'visible'); dot.setAttribute('visibility', 'visible');
       if (readout) {
         const when = new Date(best[0]).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-        readout.textContent = `${when}: ${Math.round(best[1]).toLocaleString()} ${unit}`;
+        const alt = compare.length ? nearest(compare, best[0]) : null;
+        readout.textContent = `${when}: ${Math.round(best[1]).toLocaleString()} ${unit}` +
+          (alt ? `, ${Math.round(alt[1]).toLocaleString()} ${opts.compareUnit || ''}` : '');
       }
     });
     svg.addEventListener('mouseleave', () => {
