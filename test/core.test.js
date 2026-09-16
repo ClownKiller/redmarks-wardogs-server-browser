@@ -38,7 +38,7 @@ const okServer = () => ({ status: 200, body: { server: { serverKey: 'id|abc', na
 test('builds the right URL and sends a user agent', async () => {
   const h = harness(okServer);
   const r = await h.api.getServer({ code: ' 740-878 ' });
-  assert.strictEqual(h.calls[0].url, 'https://wardogserverlist.com/api/server?code=740878');
+  assert.strictEqual(h.calls[0].url, 'https://wardogserverlist.com/api/server?code=740-878');
   assert.strictEqual(h.calls[0].opts.headers['User-Agent'], 'test');
   assert.strictEqual(r.data.server.name, 'Test');
   assert.strictEqual(r.cached, false);
@@ -111,7 +111,9 @@ test('unknown time windows fall back to safe defaults', async () => {
 });
 
 test('join code and Retry-After helpers', () => {
-  assert.strictEqual(cleanCode('ab-12 <x>'), 'ab12x');
+  assert.strictEqual(cleanCode('ab-12 <x>'), 'ab-12x');
+  assert.strictEqual(cleanCode(' 740878 '), '740878');
+  assert.strictEqual(cleanCode('4f263f2b-c918-4edc-9797-d05e2469fbf3'), '4f263f2b-c918-4edc-9797-d05e2469fbf3', 'long codes keep their dashes');
   assert.strictEqual(retryAfterMs('20'), 20000);
   assert.strictEqual(retryAfterMs(undefined), 60000);
   assert.strictEqual(retryAfterMs('1'), 5000, 'minimum 5 s');
@@ -149,6 +151,9 @@ test('favourites and settings save and load', () => {
   assert.throws(() => store.addFavourite({ key: 'id|extra' }), /up to/);
 
   assert.strictEqual(store.getSettings().refreshMinutes, 5);
+  assert.strictEqual(store.getSettings().launchGame, true, 'Join starts the game by default');
+  store.saveSettings({ launchGame: false });
+  assert.strictEqual(store.getSettings().launchGame, false);
   store.saveSettings({ refreshMinutes: 1, homeRegion: 'oce', sneaky: true });
   const s = store.getSettings();
   assert.strictEqual(s.refreshMinutes, 5, 'faster than 5 minutes is refused');

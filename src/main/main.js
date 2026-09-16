@@ -15,6 +15,14 @@ const ping = require('./ping');
 
 const pkg = require('../../package.json');
 const REPO_URL = 'https://github.com/ClownKiller/redmarks-wardogs-server-browser';
+
+// WARDOGS on Steam: https://store.steampowered.com/app/1867240/WARDOGS/
+// WARDOGS has no official "join this server" link yet, so Join copies the
+// join code and starts the game through Steam - the same thing a desktop
+// shortcut does. Nothing about the game itself is touched.
+const STEAM_APP_ID = '1867240';
+const STEAM_LAUNCH_URL = `steam://rungameid/${STEAM_APP_ID}`;
+const JOIN_CODE_PATTERN = /^[A-Za-z0-9-]{1,40}$/;
 const USER_AGENT = `RedMarksWardogsServerBrowser/${pkg.version} (+${REPO_URL})`;
 
 // Only these sites may be opened in the user's web browser from inside the app.
@@ -120,6 +128,19 @@ function registerHandlers() {
 
   handle('settings:get', async () => ({ settings: store.getSettings() }));
   handle('settings:save', async (a) => ({ settings: store.saveSettings(a) }));
+
+  handle('game:join', async (a) => {
+    const code = typeof a.code === 'string' && JOIN_CODE_PATTERN.test(a.code) ? a.code : null;
+    if (!code) throw new Error('This server has no usable join code.');
+    clipboard.writeText(code);
+    if (!store.getSettings().launchGame) return { launched: false, code };
+    try {
+      await shell.openExternal(STEAM_LAUNCH_URL); // fixed address, never built from outside input
+    } catch (err) {
+      throw new Error(`Join code ${code} copied, but Steam couldn't be opened. Start WARDOGS yourself and paste the code.`);
+    }
+    return { launched: true, code };
+  });
 
   handle('clipboard:write', async (a) => { clipboard.writeText(str(a.text, 60) || ''); return {}; });
   handle('link:open', async (a) => { openExternalSafe(str(a.url, 500)); return {}; });

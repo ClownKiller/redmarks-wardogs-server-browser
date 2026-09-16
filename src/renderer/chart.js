@@ -52,7 +52,7 @@
 
     const W = Math.max(container.clientWidth, 300);
     const H = Math.max(container.clientHeight, 150);
-    const pad = { l: 44, r: 10, t: 10, b: 26 };
+    const pad = { l: 64, r: 10, t: 10, b: 26 };
     const t0 = points[0][0];
     const t1 = points[points.length - 1][0];
     const span = Math.max(t1 - t0, 1);
@@ -66,7 +66,7 @@
       const v = yMax * f;
       svg.appendChild(svgEl('line', { class: 'grid-line', x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v) }));
       const lbl = svgEl('text', { class: 'axis-label', x: pad.l - 8, y: y(v) + 5, 'text-anchor': 'end' });
-      lbl.textContent = String(Math.round(v));
+      lbl.textContent = Math.round(v).toLocaleString();
       svg.appendChild(lbl);
     }
     for (const [t, anchor] of [[t0, 'start'], [t0 + span / 2, 'middle'], [t1, 'end']]) {
@@ -89,7 +89,7 @@
     const showDefault = () => {
       if (!readout) return;
       const last = points[points.length - 1];
-      readout.textContent = `Latest: ${Math.round(last[1])} ${unit}`;
+      readout.textContent = `Latest: ${Math.round(last[1]).toLocaleString()} ${unit}`;
     };
     showDefault();
 
@@ -104,7 +104,7 @@
       cursor.setAttribute('visibility', 'visible'); dot.setAttribute('visibility', 'visible');
       if (readout) {
         const when = new Date(best[0]).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-        readout.textContent = `${when}: ${Math.round(best[1])} ${unit}`;
+        readout.textContent = `${when}: ${Math.round(best[1]).toLocaleString()} ${unit}`;
       }
     });
     svg.addEventListener('mouseleave', () => {

@@ -182,9 +182,13 @@ class WardogsApi {
   }
 }
 
-/** Join codes are typed by people: keep letters and digits only. */
+/**
+ * Join codes are typed or pasted by people. Short codes are digits
+ * (e.g. 740878); some community codes are long IDs with dashes
+ * (e.g. 4f263f2b-c918-4edc-9797-d05e2469fbf3), so dashes are kept.
+ */
 function cleanCode(code) {
-  return String(code).replace(/[^A-Za-z0-9]/g, '').slice(0, 32);
+  return String(code).trim().replace(/[^A-Za-z0-9-]/g, '').slice(0, 40);
 }
 
 /** Retry-After can be seconds or a date. Default 60 s, cap 10 min. */

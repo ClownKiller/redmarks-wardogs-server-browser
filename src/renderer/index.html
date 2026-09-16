@@ -35,7 +35,7 @@
 
   <!-- Tabs -->
   <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" data-view="top"><i class="ti ti-list" aria-hidden="true"></i> Top 100</button>
+    <button class="tab" role="tab" data-view="top"><i class="ti ti-list" aria-hidden="true"></i> Servers</button>
     <button class="tab" role="tab" data-view="fav"><i class="ti ti-star" aria-hidden="true"></i> Favourites</button>
     <button class="tab" role="tab" data-view="regions"><i class="ti ti-world" aria-hidden="true"></i> Regions</button>
     <button class="tab" role="tab" data-view="detail"><i class="ti ti-chart-line" aria-hidden="true"></i> Details</button>
@@ -70,6 +70,12 @@
         <select id="set-home"></select>
         <small>Used for the ping estimate at the top of the window.</small>
       </label>
+      <label class="check">
+        <input type="checkbox" id="set-launch">
+        <span>Start WARDOGS when I click Join
+          <small>Join always copies the server's join code. With this on, it also starts WARDOGS through Steam, so you can paste the code (Ctrl+V) in the in-game server browser.</small>
+        </span>
+      </label>
       <label class="field">
         <span>Refresh every</span>
         <select id="set-refresh">
@@ -80,7 +86,7 @@
         <small>The server data only changes about every 5 minutes, so faster refreshing wouldn't show anything new.</small>
       </label>
       <div class="about">
-        <p>This app only reads public server data from wardogserverlist.com. It never opens, reads or changes WARDOGS game files, and it doesn't run inside the game.</p>
+        <p>This app only reads public server data from wardogserverlist.com. It never opens, reads or changes WARDOGS game files, and it doesn't run inside the game. Join starts WARDOGS the same way a Steam shortcut does.</p>
         <p>Ping is an estimate: it measures your connection to a large data centre in each region, because server addresses aren't public.</p>
         <p class="dim" id="about-version"></p>
       </div>

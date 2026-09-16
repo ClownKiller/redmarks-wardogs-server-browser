@@ -20,7 +20,8 @@ const rm = window.rm;
 const S = {
   view: 'top',
   builtView: null,
-  settings: { homeRegion: '', refreshMinutes: 5, hidePassworded: false, onlyWithSpace: false },
+  serverType: 'community',  // Servers tab switch: 'official' or 'community'
+  settings: { homeRegion: '', refreshMinutes: 5, hidePassworded: false, onlyWithSpace: false, launchGame: true },
   favourites: [],
   live: new Map(),          // serverKey -> { server, error, at }
   leaderboard: null,
@@ -30,13 +31,15 @@ const S = {
   regionsError: '',
   builds: null,
   pings: new Map(),         // region code -> number | null | 'pending'
+  liveAsked: new Map(),     // serverKey -> time we last asked for live data (Top 100 rows)
+  rowObserver: null,        // watches which Top 100 rows are on screen
   selected: null,           // { key, id, name, region, official }
   detail: null,
   detailWindow: '24h',
   detailError: '',
   detailLoading: false,
   filters: { top: { q: '', region: '' }, fav: { q: '', region: '' } },
-  sort: { top: { col: 'rank', dir: 1 }, fav: { col: 'players', dir: -1 } },
+  sort: { top: { col: 'rank', dir: 1 }, fav: { col: 'players', dir: -1 }, off: { col: 'players', dir: -1 } },
   lastRefresh: 0,
   nextRefresh: 0,
   refreshing: false,
@@ -234,11 +237,66 @@ async function refreshAll() {
   if (S.selected && S.view === 'detail') await loadDetail();
   S.lastRefresh = Date.now();
   S.nextRefresh = S.lastRefresh + S.settings.refreshMinutes * 60000;
+  S.liveAsked.clear();
+  if (S.view === 'top' && S.serverType === 'community') renderResults(); // visible rows ask again
   S.refreshing = false;
   $('btn-refresh').classList.remove('spin');
   renderStats();
   renderStatus();
   autoPickHomeRegion();
+}
+
+/**
+ * Live player counts for Top 100 rows. Only rows you can actually see are
+ * looked up, and each one at most once per refresh, so the list stays
+ * well inside the data source's rate limit.
+ */
+let renderSoon = null;
+function scheduleRender() {
+  if (renderSoon) return;
+  renderSoon = setTimeout(() => { renderSoon = null; renderResults(); }, 400);
+}
+
+function requestLive(key) {
+  const last = S.liveAsked.get(key) || 0;
+  const fresh = S.settings.refreshMinutes * 60000 - 30000;
+  if (Date.now() - last < fresh) return;
+  S.liveAsked.set(key, Date.now());
+  rm.server({ key }).then((r) => {
+    if (r.ok && r.data && r.data.server) S.live.set(key, { server: r.data.server, rank: r.data.rank, at: r.fetchedAt });
+    else if (!S.live.has(key) || !isFav(key)) S.live.set(key, { server: null, error: r.ok ? 'Offline' : r.error, at: Date.now() });
+    if (S.view === 'top') scheduleRender();
+  });
+}
+
+function watchRows(rowsWithKeys) {
+  if (S.rowObserver) S.rowObserver.disconnect();
+  S.rowObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) requestLive(e.target.dataset.key);
+  }, { root: $('view'), rootMargin: '120px 0px' });
+  for (const [row, key] of rowsWithKeys) { row.dataset.key = key; S.rowObserver.observe(row); }
+}
+
+/** Join: copy the join code and (if enabled) start WARDOGS through Steam. */
+async function joinServer(code, server) {
+  const r = await rm.join({ code });
+  if (!r.ok) { toast(r.error, true); return; }
+  const full = server && server.maxPlayers && server.players >= server.maxPlayers;
+  const fullNote = full ? ' This server is full right now, so you may be put in a queue.' : '';
+  if (r.launched) toast(`Join code ${code} copied. WARDOGS is starting: open the server browser, paste the code with Ctrl+V and join.${fullNote}`);
+  else toast(`Join code ${code} copied. Paste it into the in-game server browser with Ctrl+V.${fullNote}`);
+}
+
+function joinButton(server, big) {
+  const code = server && server.joinCode;
+  if (!code) {
+    return big ? null : el('span', { class: 'dim', title: server ? 'This server has no join code' : 'Waiting for live info', text: '–' });
+  }
+  return el('button', {
+    class: `btn primary join-btn${big ? '' : ' small'}`,
+    title: `Copy join code ${code} and start WARDOGS`,
+    on: { click: (e) => { e.stopPropagation(); joinServer(code, server); } },
+  }, icon('player-play'), big ? 'Join server' : 'Join');
 }
 
 // ============================================================
@@ -472,17 +530,113 @@ function emptyState(iconName, title, text, action) {
 }
 
 // ============================================================
-//  Tab: Top 100
+//  Tab: Servers (Official / Community switch)
 // ============================================================
 
+const FULL_LIST_URL = 'https://wardogserverlist.com/';
+
+function serverTypeSwitch() {
+  const options = [
+    ['official', 'Official servers', 'shield'],
+    ['community', 'Community servers', 'users-group'],
+  ];
+  return el('div', { class: 'type-switch', attrs: { role: 'group', 'aria-label': 'Server type' } },
+    options.map(([id, label, ic]) => el('button', {
+      class: S.serverType === id ? 'on' : '',
+      attrs: { 'aria-pressed': S.serverType === id },
+      on: { click: () => { if (S.serverType !== id) { S.serverType = id; buildView(); } } },
+    }, icon(ic), label)));
+}
+
 function topToolbar() {
-  return el('div', { class: 'toolbar' },
-    searchBox('top', 'Search server name'),
-    regionSelect('top'),
-  );
+  const parts = [serverTypeSwitch()];
+  if (S.serverType === 'community') parts.push(searchBox('top', 'Search server name'), regionSelect('top'));
+  else parts.push(addCodeBox());
+  return el('div', { class: 'toolbar' }, parts);
 }
 
 function topResults() {
+  return S.serverType === 'official' ? officialResults() : communityResults();
+}
+
+/** Reads the official/community split out of the totals feed. */
+function totalsInfo() {
+  const t = S.totals;
+  if (!t || !Array.isArray(t.cols) || !Array.isArray(t.rows) || !t.rows.length) return null;
+  const idx = (n) => t.cols.indexOf(n);
+  const toMs = (v) => (Number(v) < 1e12 ? Number(v) * 1000 : Number(v)); // accept seconds or ms
+  const latest = (n) => { const i = idx(n); return i >= 0 ? Number(t.rows[t.rows.length - 1][i]) || 0 : 0; };
+  const series = (n) => {
+    const i = idx(n); const ts = idx('ts');
+    if (i < 0 || ts < 0) return [];
+    return t.rows.map((r) => [toMs(r[ts]), Number(r[i])]);
+  };
+  return { latest, series };
+}
+
+/** Four headline cards for one server type. kind: 'off' or 'com' */
+function typeSummary(kind, ti) {
+  const label = kind === 'off' ? 'Official' : 'Community';
+  const players = ti.latest(`${kind}Players`);
+  const servers = ti.latest(`${kind}Servers`);
+  const capacity = ti.latest(`${kind}Capacity`);
+  const all = ti.latest('offPlayers') + ti.latest('comPlayers');
+  const card = (k, v) => el('div', { class: 'stat' }, el('div', { class: 'stat-label', text: k }), el('div', { class: 'stat-value', text: v }));
+  return el('div', { class: 'mini-stats' },
+    card(`${label} players now`, fmtNum(players)),
+    card(`${label} servers online`, fmtNum(servers)),
+    card('Slots filled', capacity ? `${Math.round((players / capacity) * 100)}%` : '–'),
+    card('Share of all players', all ? `${Math.round((players / all) * 100)}%` : '–'),
+  );
+}
+
+function fullListButton(label) {
+  return el('button', { class: 'btn', on: { click: () => rm.openLink({ url: FULL_LIST_URL }) } }, icon('external-link'), label);
+}
+
+function officialResults() {
+  const ti = totalsInfo();
+  const parts = [];
+  if (ti) {
+    parts.push(typeSummary('off', ti));
+    const chartBox = el('div', { class: 'chart' });
+    const readout = el('div', { class: 'chart-readout' });
+    parts.push(el('div', { class: 'chart-box' },
+      el('div', { class: 'section-title', style: { marginTop: '0' } }, icon('chart-line'), ' Official players, last 24 hours'),
+      chartBox, readout));
+    const pts = ti.series('offPlayers');
+    requestAnimationFrame(() => window.RMChart.line(chartBox, pts, { readout, unit: 'players' }));
+  } else {
+    parts.push(el('p', { class: 'dim', text: 'Loading official server numbers…' }));
+  }
+
+  parts.push(el('div', { class: 'section-title' }, icon('shield'), ' Your official servers'));
+  const mine = favItems((x) => x.official);
+  if (mine.length) parts.push(favTable(mine, 'off'));
+  else {
+    parts.push(emptyState('shield', 'Add an official server',
+      'Find an official server in the in-game server browser, then type its join code above and select Add server.'));
+  }
+
+  parts.push(el('div', { class: 'card note' },
+    el('p', { text: 'Our data source doesn\'t share its full official server list with apps, so only the official servers you add appear here. Official servers restart often: if one shows Offline, add it again with its new join code.' }),
+    fullListButton('Open the full list in your browser')));
+  return el('div', null, parts);
+}
+
+function communityResults() {
+  const ti = totalsInfo();
+  const summary = ti ? typeSummary('com', ti) : null;
+  const list = communityTable();
+  return el('div', null, summary,
+    el('div', { class: 'section-title' }, icon('list'), ' Top 100 community servers'),
+    list,
+    el('div', { class: 'card note' },
+      el('p', { text: 'Ranked by average players over the last 7 days. Players now updates for the rows on screen. Join copies the join code and starts WARDOGS. Want every community server?' }),
+      fullListButton('Open the full list in your browser')));
+}
+
+function communityTable() {
   if (!S.leaderboard) {
     if (S.leaderboardError) return emptyState('alert-triangle', 'Couldn\'t load the top 100', S.leaderboardError, retryButton());
     return emptyState('refresh', 'Loading the top 100…', 'Fetching the most popular community servers.');
@@ -493,38 +647,49 @@ function topResults() {
   if (q) list = list.filter((s) => String(s.name || '').toLowerCase().includes(q));
   if (f.region) list = list.filter((s) => s.region === f.region);
 
+  const liveOf = (s) => { const l = S.live.get(s.serverKey); return l && l.server; };
   list = sortRows(list, 'top', {
     rank: (s) => s.rank, name: (s) => String(s.name || '').toLowerCase(), region: (s) => regionName(s.region),
-    avg: (s) => s.avgPlayers, peak: (s) => s.peakPlayers, uptime: (s) => s.uptimePct, ping: (s) => pingFor(s.region),
+    players: (s) => (liveOf(s) ? liveOf(s).players : null),
+    avg: (s) => s.avgPlayers, ping: (s) => pingFor(s.region),
   });
 
   if (!list.length) return emptyState('search', 'No servers match', 'Try a different name or region.');
 
+  const watched = [];
   const rows = list.map((s) => {
     const entry = { key: s.serverKey, name: s.name, region: s.region, official: false };
-    return el('tr', { on: { click: () => openDetail(entry) }, title: 'Show server details' },
+    const l = S.live.get(s.serverKey);
+    const live = l && l.server;
+    let playersTd;
+    if (live) playersTd = playersCell(live);
+    else if (l) playersTd = el('td', { class: 'dim', text: 'Offline' });
+    else playersTd = el('td', { class: 'dim', text: 'Checking…' });
+    const row = el('tr', { class: l && !live ? 'offline' : '', on: { click: () => openDetail(entry) }, title: 'Show server details' },
       el('td', null, starButton(entry)),
       el('td', { class: 'rank', text: `#${s.rank}` }),
       el('td', { class: 'name-cell', text: s.name || 'Unnamed server', title: s.name }),
       el('td', { class: 'sub', text: regionName(s.region) }),
+      playersTd,
       el('td', { class: 'num', text: Number.isFinite(s.avgPlayers) ? s.avgPlayers.toFixed(1) : '–' }),
-      el('td', { class: 'num', text: fmtNum(s.peakPlayers) }),
-      el('td', { class: 'num', text: Number.isFinite(s.uptimePct) ? `${Math.round(s.uptimePct)}%` : '–' }),
       el('td', { class: 'num', text: pingText(pingFor(s.region)) }),
+      el('td', { class: 'join-cell' }, joinButton(live)),
     );
+    watched.push([row, s.serverKey]);
+    return row;
   });
+  requestAnimationFrame(() => watchRows(watched));
 
-  const note = el('p', { class: 'dim', text: 'Ranked by average players over the last 7 days. Click a server for live details, or star it to track it.' });
-  return el('div', null, table('top', [
+  return table('top', [
     { id: 'star', label: '', width: '40px', sort: false },
     { id: 'rank', label: 'Rank', width: '70px' },
     { id: 'name', label: 'Server' },
-    { id: 'region', label: 'Region', width: '18%' },
-    { id: 'avg', label: 'Avg players', width: '11%', cls: 'num', defaultDir: -1 },
-    { id: 'peak', label: 'Peak', width: '8%', cls: 'num', defaultDir: -1 },
-    { id: 'uptime', label: 'Uptime', width: '9%', cls: 'num', defaultDir: -1 },
-    { id: 'ping', label: 'Ping (est.)', width: '10%', cls: 'num' },
-  ], rows), note);
+    { id: 'region', label: 'Region', width: '16%' },
+    { id: 'players', label: 'Players now', width: '13%', defaultDir: -1 },
+    { id: 'avg', label: 'Avg (7 days)', width: '10%', cls: 'num', defaultDir: -1 },
+    { id: 'ping', label: 'Ping (est.)', width: '9%', cls: 'num' },
+    { id: 'join', label: '', width: '86px', sort: false },
+  ], rows);
 }
 
 function retryButton() {
@@ -535,15 +700,20 @@ function retryButton() {
 //  Tab: Favourites
 // ============================================================
 
-function favToolbar() {
+/** Join code box + Add server button (used on Favourites and Official servers). */
+function addCodeBox() {
   const input = el('input', {
     class: 'input',
-    attrs: { placeholder: 'Join code', 'aria-label': 'Join code', maxlength: '20' },
+    attrs: { placeholder: 'Join code', 'aria-label': 'Join code', maxlength: '40' },
   });
   const button = el('button', { class: 'btn primary', on: { click: () => addByCode(input, button) } }, icon('plus'), 'Add server');
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addByCode(input, button); });
+  return el('div', { class: 'add-box' }, input, button);
+}
+
+function favToolbar() {
   return el('div', { class: 'toolbar' },
-    el('div', { class: 'add-box' }, input, button),
+    addCodeBox(),
     searchBox('fav', 'Search favourites'),
     regionSelect('fav'),
     toggleChip('Has space', 'users', 'onlyWithSpace'),
@@ -554,20 +724,33 @@ function favToolbar() {
 function favResults() {
   if (!S.favourites.length) {
     return emptyState('star', 'Add your first server',
-      'Type a server\'s join code above and select Add server, or star any server in the Top 100 tab. Join codes are shown in the in-game server browser.');
+      'Type a server\'s join code above and select Add server, or star any server in the Servers tab. Join codes are shown in the in-game server browser.');
   }
   const f = S.filters.fav;
   const q = f.q.trim().toLowerCase();
-  let list = S.favourites.map((fav) => {
-    const l = S.live.get(fav.key);
-    return { fav, live: l, s: l && l.server };
-  });
+  let list = favItems();
   if (q) list = list.filter((x) => String((x.s && x.s.name) || x.fav.name).toLowerCase().includes(q));
   if (f.region) list = list.filter((x) => ((x.s && x.s.region) || x.fav.region) === f.region);
   if (S.settings.onlyWithSpace) list = list.filter((x) => x.s && x.s.players < x.s.maxPlayers);
   if (S.settings.hidePassworded) list = list.filter((x) => !(x.s && x.s.passworded));
 
-  list = sortRows(list, 'fav', {
+  if (!list.length) return emptyState('filter', 'No favourites match', 'Clear the search or turn off a filter to see them.');
+  return favTable(list, 'fav');
+}
+
+/** Favourites joined with their live data. official = known from live data, else from when it was saved. */
+function favItems(filterFn) {
+  const items = S.favourites.map((fav) => {
+    const l = S.live.get(fav.key);
+    const srv = l && l.server;
+    return { fav, live: l, s: srv, official: srv ? Boolean(srv.official) : Boolean(fav.official) };
+  });
+  return filterFn ? items.filter(filterFn) : items;
+}
+
+/** The favourites-style table. tabKey picks which saved sort order to use. */
+function favTable(list, tabKey) {
+  list = sortRows(list, tabKey, {
     name: (x) => String((x.s && x.s.name) || x.fav.name).toLowerCase(),
     map: (x) => (x.s ? String(x.s.map || '') : null),
     mode: (x) => (x.s ? String(x.s.mode || x.s.gameMode || '') : null),
@@ -575,8 +758,6 @@ function favResults() {
     players: (x) => (x.s ? x.s.players : null),
     ping: (x) => pingFor((x.s && x.s.region) || x.fav.region),
   });
-
-  if (!list.length) return emptyState('filter', 'No favourites match', 'Clear the search or turn off a filter to see them.');
 
   const rows = list.map(({ fav, live, s }) => {
     const region = (s && s.region) || fav.region;
@@ -587,7 +768,7 @@ function favResults() {
     if (!live) {
       return el('tr', { on: { click: () => openDetail(entry) } },
         el('td', null, starButton(entry)), nameCell,
-        el('td', { class: 'dim', text: 'Checking…', attrs: { colspan: 6 } }));
+        el('td', { class: 'dim', text: 'Checking…', attrs: { colspan: 7 } }));
     }
     if (!s) {
       return el('tr', { class: 'offline', on: { click: () => openDetail(entry) } },
@@ -596,6 +777,7 @@ function favResults() {
         el('td', { text: regionName(region) }),
         el('td', { text: '–' }),
         el('td', { class: 'num', text: '–' }),
+        el('td', { text: '' }),
         el('td', { text: '' }));
     }
     return el('tr', { on: { click: () => openDetail(entry) }, title: 'Show server details' },
@@ -607,18 +789,20 @@ function favResults() {
       playersCell(s),
       el('td', { class: 'num', text: pingText(pingFor(region)) }),
       el('td', { title: s.passworded ? 'Password needed' : 'No password' }, icon(s.passworded ? 'lock' : 'lock-open', s.passworded ? 'accent' : '')),
+      el('td', { class: 'join-cell' }, joinButton(s)),
     );
   });
 
-  return table('fav', [
+  return table(tabKey, [
     { id: 'star', label: '', width: '40px', sort: false },
     { id: 'name', label: 'Server' },
-    { id: 'map', label: 'Map', width: '12%' },
-    { id: 'mode', label: 'Mode', width: '14%' },
-    { id: 'region', label: 'Region', width: '15%' },
+    { id: 'map', label: 'Map', width: '11%' },
+    { id: 'mode', label: 'Mode', width: '13%' },
+    { id: 'region', label: 'Region', width: '14%' },
     { id: 'players', label: 'Players', width: '13%', defaultDir: -1 },
     { id: 'ping', label: 'Ping (est.)', width: '10%', cls: 'num' },
-    { id: 'lock', label: '', width: '40px', sort: false },
+    { id: 'lock', label: '', width: '36px', sort: false },
+    { id: 'join', label: '', width: '86px', sort: false },
   ], rows);
 }
 
@@ -696,8 +880,8 @@ function detailResults() {
   const sel = S.selected;
   if (!sel) {
     return emptyState('chart-line', 'Pick a server',
-      'Select any server in the Top 100 or Favourites tab to see its live info, player history and maps.',
-      el('button', { class: 'btn', on: { click: () => switchView('top') } }, icon('list'), 'Open Top 100'));
+      'Select any server in the Servers or Favourites tab to see its live info, player history and maps.',
+      el('button', { class: 'btn', on: { click: () => switchView('top') } }, icon('list'), 'Open server list'));
   }
 
   const d = S.detail;
@@ -717,7 +901,8 @@ function detailResults() {
       ),
     ),
     el('div', { class: 'detail-actions' },
-      el('button', { class: `btn${fav ? '' : ' primary'}`, on: { click: () => toggleFavourite({ key: sel.key, name, region, official }) } },
+      joinButton(live, true),
+      el('button', { class: 'btn', on: { click: () => toggleFavourite({ key: sel.key, name, region, official }) } },
         icon('star'), fav ? 'Remove favourite' : 'Add to favourites'),
     ),
   );
@@ -812,6 +997,7 @@ function detailResults() {
 function openSettings() {
   fillRegionSelects();
   $('set-refresh').value = String(S.settings.refreshMinutes);
+  $('set-launch').checked = S.settings.launchGame;
   $('settings').hidden = false;
   $('set-home').focus();
 }
@@ -844,6 +1030,10 @@ function wireFrame() {
     renderStats();
     if (S.view === 'regions') renderResults();
   });
+  $('set-launch').addEventListener('change', async (e) => {
+    const r = await rm.settingsSave({ launchGame: e.target.checked });
+    if (r.ok) S.settings = r.settings;
+  });
   $('set-refresh').addEventListener('change', async (e) => {
     const r = await rm.settingsSave({ refreshMinutes: Number(e.target.value) });
     if (r.ok) S.settings = r.settings;
@@ -860,7 +1050,7 @@ function wireFrame() {
   let resizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (S.view === 'detail' || S.view === 'regions') renderResults(); }, 200);
+    resizeTimer = setTimeout(() => { if (S.view === 'detail' || S.view === 'regions' || (S.view === 'top' && S.serverType === 'official')) renderResults(); }, 200);
   });
 }
 

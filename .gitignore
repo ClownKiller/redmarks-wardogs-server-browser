@@ -1,0 +1,9 @@
+# Downloaded or generated - never upload these
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+
+# Copied in automatically by scripts/copy-assets.js
+src/renderer/vendor/

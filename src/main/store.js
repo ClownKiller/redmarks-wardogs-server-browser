@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   refreshMinutes: 5,       // 5, 10 or 15 - never faster than 5
   hidePassworded: false,
   onlyWithSpace: false,
+  launchGame: true,        // Join button also starts WARDOGS through Steam
 };
 
 class JsonFile {
@@ -100,6 +101,7 @@ class Store {
     s.homeRegion = typeof s.homeRegion === 'string' ? s.homeRegion.slice(0, 40) : '';
     s.hidePassworded = Boolean(s.hidePassworded);
     s.onlyWithSpace = Boolean(s.onlyWithSpace);
+    s.launchGame = Boolean(s.launchGame);
     return s;
   }
 

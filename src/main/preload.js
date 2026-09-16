@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('rm', {
   settingsGet: call('settings:get'),
   settingsSave: call('settings:save'),
 
+  join: call('game:join'),             // { code } -> copies code, starts WARDOGS via Steam
   copy: call('clipboard:write'),       // { text }
   openLink: call('link:open'),         // { url }
 

@@ -154,6 +154,30 @@ table.list { width: 100%; border-collapse: collapse; table-layout: fixed; }
 }
 .badge.official { border-color: var(--orange); color: var(--orange); }
 
+/* ---------- servers tab: official / community switch ---------- */
+.type-switch { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+.type-switch button {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 16px; border: 0; cursor: pointer;
+  background: var(--panel); color: var(--grey); font-size: 16px; letter-spacing: 0.04em;
+}
+.type-switch button + button { border-left: 1px solid var(--line-strong); }
+.type-switch button:hover { color: var(--white); }
+.type-switch button.on { background: var(--orange); color: #1A0E02; font-weight: 600; }
+.type-switch button.on .ti { color: #1A0E02; }
+.mini-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.note { margin-top: 14px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.note p { margin: 0; color: var(--grey); font-size: 15px; }
+.note .btn { flex-shrink: 0; }
+
+/* ---------- join ---------- */
+.join-cell { text-align: right; overflow: visible; }
+.join-btn .ti { font-size: 15px; }
+.join-btn.small { padding: 0 12px; }
+.check { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; cursor: pointer; font-size: 16px; font-weight: 500; }
+.check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--orange); flex-shrink: 0; }
+.check small { display: block; font-size: 14px; font-weight: 400; color: var(--grey); margin-top: 3px; }
+
 /* ---------- empty / error messages ---------- */
 .empty { text-align: center; padding: 48px 20px; color: var(--grey); }
 .empty .ti { font-size: 40px; color: var(--orange); display: block; margin-bottom: 10px; }
