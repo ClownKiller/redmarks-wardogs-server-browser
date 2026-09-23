@@ -66,6 +66,13 @@
         <h2 id="settings-title">Settings</h2>
         <button class="icon-btn" id="settings-close" aria-label="Close settings"><i class="ti ti-x"></i></button>
       </div>
+      <div class="seg full" role="group" aria-label="Settings sections">
+        <button id="set-tab-general" class="on">General</button>
+        <button id="set-tab-squad">Squad</button>
+        <button id="set-tab-about">About</button>
+      </div>
+      <div class="panel-body">
+      <div id="set-page-general">
       <label class="field">
         <span>Home region</span>
         <select id="set-home"></select>
@@ -86,8 +93,10 @@
         </select>
         <small>The server data only changes about every 5 minutes, so faster refreshing wouldn't show anything new.</small>
       </label>
-      <div class="squad-settings">
-        <h3>Squad <button class="btn small" id="squad-help-btn"><i class="ti ti-help" aria-hidden="true"></i> How to set this up</button></h3>
+      </div>
+
+      <div class="squad-settings" id="set-page-squad" hidden>
+        <h3>Share where you're heading <button class="btn small" id="squad-help-btn"><i class="ti ti-help" aria-hidden="true"></i> How to set this up</button></h3>
         <p class="dim">Let your mates see which server you're heading to. Everything here is off until you turn it on, and nothing is shared unless you press Join.</p>
         <label class="field">
           <span>Your name in the squad</span>
@@ -139,10 +148,11 @@
         </label>
       </div>
 
-      <div class="about">
+      <div class="about" id="set-page-about" hidden>
         <p>This app only reads public server data from the Wardog Servers API (wardogservers.com). It never opens, reads or changes WARDOGS game files, and it doesn't run inside the game. Join starts WARDOGS the same way a Steam shortcut does.</p>
         <p>Ping is an estimate: it measures your connection to a large data centre in each region, because server addresses aren't public.</p>
         <p class="dim" id="about-version"></p>
+      </div>
       </div>
     </div>
   </div>

@@ -249,24 +249,35 @@ table.list { width: 100%; border-collapse: collapse; table-layout: fixed; }
   display: flex; align-items: center; justify-content: center; z-index: 10;
 }
 .overlay[hidden] { display: none; }
-.panel { width: 460px; max-width: 92vw; background: var(--panel); border: 1px solid var(--orange); border-radius: 6px; padding: 16px 20px 18px; }
-.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.panel {
+  width: 460px; max-width: 92vw;
+  max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--orange); border-radius: 6px; padding: 14px 20px 16px;
+}
+/* The middle of the panel scrolls, so the window is never too small for it. */
+.panel-body { overflow-y: auto; padding-right: 8px; margin-right: -8px; }
+.panel-body::-webkit-scrollbar { width: 8px; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+.seg.full { display: flex; width: 100%; margin: 8px 0 4px; flex-shrink: 0; }
+.seg.full button { flex: 1; padding: 7px 8px; font-size: 16px; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-shrink: 0; }
 .panel h2 { font-family: var(--font-title); font-weight: 400; font-size: 22px; margin: 0; letter-spacing: 0.04em; }
 .field { display: flex; flex-direction: column; gap: 5px; margin: 14px 0; }
 .field > span { font-size: 16px; font-weight: 500; }
 .field small { font-size: 14px; color: var(--grey); }
-.about { border-top: 1px solid var(--line-strong); margin-top: 16px; padding-top: 6px; font-size: 15px; color: var(--grey); }
+.about { padding-top: 6px; font-size: 15px; color: var(--grey); }
 .about p { margin: 8px 0; }
 
 /* ---------- squad ---------- */
-.squad-settings { border-top: 1px solid var(--line-strong); margin-top: 16px; padding-top: 10px; }
+.squad-settings { padding-top: 4px; }
+.squad-settings[hidden], .about[hidden], #set-page-general[hidden] { display: none; }
 .squad-settings h3 { display: flex; justify-content: space-between; align-items: center; font-size: 19px; font-weight: 500; margin: 6px 0; }
 .squad-settings p { font-size: 15px; margin: 6px 0 10px; }
 .field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .field.two label { display: flex; flex-direction: column; gap: 5px; font-size: 16px; font-weight: 500; }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .panel.wide { width: 620px; }
-.help-body { font-size: 16px; color: var(--grey); max-height: 46vh; overflow-y: auto; margin-top: 12px; }
+.help-body { font-size: 16px; color: var(--grey); overflow-y: auto; margin-top: 12px; }
 .help-body ol { padding-left: 22px; }
 .help-body li { margin: 8px 0; }
 .help-body strong { color: var(--white); }

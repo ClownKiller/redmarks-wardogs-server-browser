@@ -839,14 +839,14 @@ function squadResults() {
   if (!set.squadApiOn && !set.squadDiscordOn) {
     return emptyState('users-group', 'Share where you\'re heading',
       'Squad presence lets your mates see which server you pressed Join on. Set it up with a Discord channel, or with the Web API on your own website.',
-      el('button', { class: 'btn primary', on: { click: openSettings } }, icon('settings'), 'Open settings'));
+      el('button', { class: 'btn primary', on: { click: () => openSettings('squad') } }, icon('settings'), 'Open settings'));
   }
 
   const parts = [];
   if (set.squadDiscordOn && !set.squadApiOn) {
     parts.push(el('div', { class: 'card note' },
       el('p', { text: 'Discord announcements are on. The app posts where you\'re heading when you press Join, but it can\'t read Discord back, so your mates appear in the Discord channel rather than here. Turn on the Web API to get a live squad list.' }),
-      el('button', { class: 'btn', on: { click: openSettings } }, icon('settings'), 'Settings')));
+      el('button', { class: 'btn', on: { click: () => openSettings('squad') } }, icon('settings'), 'Settings')));
     return el('div', null, parts);
   }
 
@@ -1020,7 +1020,17 @@ function detailResults() {
 //  Settings panel
 // ============================================================
 
-function openSettings() {
+/** Settings has three pages so it always fits, even on a small window. */
+function showSettingsPage(which) {
+  for (const name of ['general', 'squad', 'about']) {
+    document.getElementById(`set-page-${name}`).hidden = name !== which;
+    document.getElementById(`set-tab-${name}`).classList.toggle('on', name === which);
+  }
+  const body = document.querySelector('.panel-body');
+  if (body) body.scrollTop = 0;
+}
+
+function openSettings(page) {
   fillRegionSelects();
   $('set-refresh').value = String(S.settings.refreshMinutes);
   $('set-launch').checked = S.settings.launchGame;
@@ -1032,8 +1042,8 @@ function openSettings() {
   $('squad-discord-on').checked = S.settings.squadDiscordOn;
   $('squad-api-on').checked = S.settings.squadApiOn;
   $('squad-announce').checked = S.settings.squadAnnounce;
+  showSettingsPage(page === 'squad' ? 'squad' : 'general');
   $('settings').hidden = false;
-  $('set-home').focus();
 }
 function closeSettings() { $('settings').hidden = true; }
 
@@ -1044,7 +1054,7 @@ function closeSettings() { $('settings').hidden = true; }
 function wireFrame() {
   document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => switchView(t.dataset.view)));
   $('btn-refresh').addEventListener('click', refreshAll);
-  $('btn-settings').addEventListener('click', openSettings);
+  $('btn-settings').addEventListener('click', () => openSettings());
   $('btn-min').addEventListener('click', () => rm.minimize());
   $('btn-max').addEventListener('click', () => rm.maximize());
   $('btn-close').addEventListener('click', () => rm.close());
@@ -1053,7 +1063,7 @@ function wireFrame() {
     i.className = `ti ti-${st.maximized ? 'copy' : 'square'}`;
   });
   $('link-source').addEventListener('click', (e) => { e.preventDefault(); rm.openLink({ url: SOURCE_URL }); });
-  $('stat-ping').addEventListener('click', openSettings);
+  $('stat-ping').addEventListener('click', () => openSettings());
 
   $('settings-close').addEventListener('click', closeSettings);
   $('settings').addEventListener('click', (e) => { if (e.target.id === 'settings') closeSettings(); });
@@ -1075,6 +1085,9 @@ function wireFrame() {
     renderStatus();
   });
 
+  for (const name of ['general', 'squad', 'about']) {
+    $(`set-tab-${name}`).addEventListener('click', () => showSettingsPage(name));
+  }
   wireSquadSettings();
 
   document.addEventListener('keydown', (e) => {
