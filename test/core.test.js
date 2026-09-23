@@ -202,9 +202,13 @@ test('favourites and settings save and load', () => {
   assert.strictEqual(store.getSettings().hideEmpty, false);
   store.saveSettings({ launchGame: false });
   assert.strictEqual(store.getSettings().launchGame, false);
-  store.saveSettings({ refreshMinutes: 1, homeRegion: 'oce', sneaky: true });
+  store.saveSettings({ refreshMinutes: 0.5, homeRegion: 'oce', sneaky: true });
   const s = store.getSettings();
-  assert.strictEqual(s.refreshMinutes, 5, 'faster than 5 minutes is refused');
+  assert.strictEqual(s.refreshMinutes, 5, 'polling faster than the source updates is refused');
+  store.saveSettings({ refreshMinutes: 1.5 });
+  assert.strictEqual(store.getSettings().refreshMinutes, 1.5, '1.5 minutes is allowed');
+  store.saveSettings({ refreshMinutes: 7 });
+  assert.strictEqual(store.getSettings().refreshMinutes, 5, 'an unknown value falls back to 5');
   assert.strictEqual(s.homeRegion, 'oce');
   assert.strictEqual(s.sneaky, undefined, 'unknown settings are ignored');
 

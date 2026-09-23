@@ -87,11 +87,13 @@
       <label class="field">
         <span>Refresh every</span>
         <select id="set-refresh">
+          <option value="1.5">1.5 minutes</option>
+          <option value="3">3 minutes</option>
           <option value="5">5 minutes</option>
           <option value="10">10 minutes</option>
           <option value="15">15 minutes</option>
         </select>
-        <small>The server data only changes about every 5 minutes, so faster refreshing wouldn't show anything new.</small>
+        <small>The server list is rebuilt once a minute at the source, so 1.5 minutes is as fresh as it gets. You can always press the refresh arrow at the top for an instant check.</small>
       </label>
       </div>
 

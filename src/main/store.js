@@ -10,11 +10,20 @@
 const fs = require('fs');
 const path = require('path');
 
-const MAX_FAVOURITES = 40; // keeps a full refresh well under the API rate limit
+const MAX_FAVOURITES = 40; // favourites are read from the one server list, so this is just for tidiness
+
+/*
+ * How often the app may refresh, in minutes. The server data itself is
+ * rebuilt once a minute at the source, and its owner asks apps not to poll
+ * faster than that, so 1.5 minutes is the quickest offered. Repeat checks are
+ * cheap: the app sends the "nothing changed since last time" header, and the
+ * source replies with no data at all when the list is unchanged.
+ */
+const REFRESH_CHOICES = [1.5, 3, 5, 10, 15];
 
 const DEFAULT_SETTINGS = {
   homeRegion: '',          // '' = not chosen yet
-  refreshMinutes: 5,       // 5, 10 or 15 - never faster than 5
+  refreshMinutes: 5,       // see REFRESH_CHOICES - never faster than the source updates
   hidePassworded: false,
   onlyWithSpace: false,
   hideEmpty: false,
@@ -132,7 +141,7 @@ class Store {
 
   getSettings() {
     const s = { ...DEFAULT_SETTINGS, ...this.setFile.read() };
-    s.refreshMinutes = [5, 10, 15].includes(Number(s.refreshMinutes)) ? Number(s.refreshMinutes) : 5;
+    s.refreshMinutes = REFRESH_CHOICES.includes(Number(s.refreshMinutes)) ? Number(s.refreshMinutes) : 5;
     s.homeRegion = typeof s.homeRegion === 'string' ? s.homeRegion.slice(0, 40) : '';
     s.hidePassworded = Boolean(s.hidePassworded);
     s.onlyWithSpace = Boolean(s.onlyWithSpace);
@@ -157,4 +166,4 @@ class Store {
   }
 }
 
-module.exports = { Store, MAX_FAVOURITES, DEFAULT_SETTINGS };
+module.exports = { Store, MAX_FAVOURITES, DEFAULT_SETTINGS, REFRESH_CHOICES };
