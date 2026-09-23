@@ -12,6 +12,7 @@ const path = require('path');
 const { WardogsApi, cleanCode, isJoinCode } = require('./api');
 const { Store } = require('./store');
 const ping = require('./ping');
+const { Squad, newSquad, makeInvite, readInvite, checkApiUrl, checkWebhook, cleanName } = require('./squad');
 
 const pkg = require('../../package.json');
 const REPO_URL = 'https://github.com/ClownKiller/redmarks-wardogs-server-browser';
@@ -31,6 +32,7 @@ const EXTERNAL_ALLOWED = ['wardogservers.com', 'github.com'];
 let win = null;
 let api = null;
 let store = null;
+let squad = null;
 
 // One copy of the app at a time; a second launch just focuses the first.
 if (!app.requestSingleInstanceLock()) {
@@ -45,6 +47,11 @@ if (!app.requestSingleInstanceLock()) {
 function start() {
   api = new WardogsApi({ fetchImpl: (url, opts) => net.fetch(url, opts), userAgent: USER_AGENT });
   store = new Store(app.getPath('userData'));
+  squad = new Squad({
+    fetchImpl: (url, opts) => net.fetch(url, opts),
+    userAgent: USER_AGENT,
+    getSettings: () => store.getSettings(),
+  });
   registerHandlers();
   createWindow();
 }
@@ -136,14 +143,61 @@ function registerHandlers() {
     const code = isJoinCode(a.code) ? a.code : null;
     if (!code) throw new Error('This server has no usable join code.');
     clipboard.writeText(code);
-    if (!store.getSettings().launchGame) return { launched: false, code };
+
+    // Tell the squad, if the user set that up and didn't ask for a quiet join.
+    let shared = null;
+    if (!a.quiet && store.getSettings().squadAnnounce) {
+      const result = await squad.announce({ code, name: str(a.serverName, 80), region: str(a.region, 40) });
+      shared = { api: result.api, discord: result.discord, errors: result.errors || [] };
+    }
+    if (!store.getSettings().launchGame) return { launched: false, code, shared };
     try {
       await shell.openExternal(STEAM_LAUNCH_URL); // fixed address, never built from outside input
     } catch (err) {
       throw new Error(`Join code ${code} copied, but Steam couldn't be opened. Start WARDOGS yourself and paste the code.`);
     }
-    return { launched: true, code };
+    return { launched: true, code, shared };
   });
+
+  // ----- squad presence -----
+
+  handle('squad:create', async (a) => {
+    const made = newSquad(str(a.squadName, 40));
+    const settings = store.saveSettings({ squadCode: made.squadCode, squadKey: made.squadKey });
+    return { squad: made, settings };
+  });
+
+  handle('squad:invite', async () => {
+    const s = store.getSettings();
+    if (!s.squadApiUrl) throw new Error('Add your website address first, then create or join a squad.');
+    if (!s.squadCode || !s.squadKey) throw new Error('Create a squad first, or paste an invite you were sent.');
+    return { invite: makeInvite({ apiUrl: s.squadApiUrl, squadCode: s.squadCode, squadKey: s.squadKey }) };
+  });
+
+  handle('squad:join', async (a) => {
+    const invite = readInvite(str(a.line, 2000) || '');
+    const settings = store.saveSettings({
+      squadApiUrl: invite.apiUrl, squadCode: invite.squadCode, squadKey: invite.squadKey, squadApiOn: true,
+    });
+    return { settings };
+  });
+
+  /** Save squad settings, checking the web address and webhook look right. */
+  handle('squad:save', async (a) => {
+    const patch = {};
+    if (a.name != null) patch.squadName = cleanName(a.name);
+    if (a.apiUrl != null) patch.squadApiUrl = a.apiUrl ? checkApiUrl(a.apiUrl) : '';
+    if (a.webhook != null) patch.squadWebhook = a.webhook ? checkWebhook(a.webhook) : '';
+    if (a.code != null) patch.squadCode = str(a.code, 40) || '';
+    if (a.key != null) patch.squadKey = str(a.key, 80) || '';
+    if (a.apiOn != null) patch.squadApiOn = Boolean(a.apiOn);
+    if (a.discordOn != null) patch.squadDiscordOn = Boolean(a.discordOn);
+    if (a.announce != null) patch.squadAnnounce = Boolean(a.announce);
+    return { settings: store.saveSettings(patch) };
+  });
+
+  handle('squad:roster', async (a) => squad.getRoster(Boolean(a.force)));
+  handle('squad:leave', async () => squad.leave());
 
   handle('clipboard:write', async (a) => { clipboard.writeText(str(a.text, 80) || ''); return {}; });
   handle('link:open', async (a) => { openExternalSafe(str(a.url, 500)); return {}; });

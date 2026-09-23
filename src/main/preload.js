@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('rm', {
 
   favList: call('fav:list'),
   favAdd: call('fav:add'),             // { key, name, region, official }
+  squadCreate: call('squad:create'),   // { squadName }
+  squadInvite: call('squad:invite'),   // -> one line to send a mate
+  squadJoin: call('squad:join'),       // { line }
+  squadSave: call('squad:save'),       // { name, apiUrl, webhook, code, key, apiOn, discordOn, announce }
+  squadRoster: call('squad:roster'),   // { force }
+  squadLeave: call('squad:leave'),
+
   favReplace: call('fav:replace'),     // { oldKey, key, name, region, official }
   favRemove: call('fav:remove'),       // { key }
   favTouch: call('fav:touch'),         // { key, name, region }

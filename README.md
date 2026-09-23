@@ -9,6 +9,7 @@ A Windows server browser for **WARDOGS**: browse every official and community se
 - **Favourites:** star any server, or add one by its join code. Join codes don't change when a server restarts, so favourites keep working.
 - **Regions:** players and servers in each region, a 24-hour trend, and your ping estimate to each one.
 - **Details:** live info, join code with a copy button, level and cash limits, player history (24 hours to 90 days), uptime, and maps played.
+- **Squad:** optionally share which server you're heading to with your mates, through a Discord channel or a small API on your own website. Off unless you turn it on. See [SETUP-GUIDE.md](SETUP-GUIDE.md).
 - **Refreshes every 5 minutes** (or 10 or 15, set in Settings).
 
 ## Safe by design
@@ -20,6 +21,15 @@ A Windows server browser for **WARDOGS**: browse every official and community se
 - Favourites and settings are saved in `%APPDATA%\RedMarks Wardogs Server Browser\`.
 
 Server data: [Wardog Servers](https://wardogservers.com/). Not affiliated with Bulkhead, Team17 or Wardog Servers.
+
+## Is this safe?
+
+Windows may show **"Windows protected your PC"** when you run the installer. That's SmartScreen saying the file is new and unsigned, not that anything is wrong with it. Click **More info**, then **Run anyway**. A code signing certificate would put a name on it, but costs a few hundred dollars a year and wouldn't remove the warning by itself, since SmartScreen builds trust from download numbers.
+
+Two things you can check for yourself:
+
+- **The installer is built by GitHub, not on anyone's PC.** Every release is built automatically from the code in this repository, and you can read the build steps in `.github/workflows/build.yml`.
+- **Every release has a SHA-256 checksum.** Download the `.sha256.txt` file next to the installer, then in PowerShell run `Get-FileHash .\RedMarks-Wardogs-Server-Browser-Setup-x.x.x.exe -Algorithm SHA256`. The numbers should match.
 
 ## Install
 
@@ -47,6 +57,7 @@ If the run shows a red cross, open it, click the failed step, and send a screens
 | `src/main/preload.js` | The fixed list of actions the screen may request |
 | `src/main/api.js` | Talks to the Wardog Servers API (cache, rate limit, join-code checks) |
 | `src/main/ping.js` | Region ping estimate |
+| `src/main/squad.js` | Squad presence: Discord announcements and the Web API |
 | `src/main/store.js` | Saves favourites (by join code) and settings |
 | `src/renderer/index.html` | Window layout |
 | `src/renderer/styles.css` | Colours, fonts and look (edit here to re-skin) |
@@ -54,6 +65,8 @@ If the run shows a red cross, open it, click the failed step, and send a screens
 | `src/renderer/chart.js` | Player history chart |
 | `src/renderer/icon.png` | Window icon |
 | `test/core.test.js` | Automated tests, run before every build |
+| `webapi/` | Optional PHP files for squad presence on your own website |
+| `SETUP-GUIDE.md` | How to set up squad presence |
 | `package.json`, `package-lock.json` | App name, version and exact library versions |
 
 ## For developers

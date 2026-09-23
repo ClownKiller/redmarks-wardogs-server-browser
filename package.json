@@ -1,7 +1,7 @@
 {
   "name": "redmarks-wardogs-server-browser",
   "productName": "RedMarks Wardogs Server Browser",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Standalone server browser for WARDOGS. Reads public data from wardogserverlist.com. Never touches the game.",
   "main": "src/main/main.js",
   "author": "RedMarks",

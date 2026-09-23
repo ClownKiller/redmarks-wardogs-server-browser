@@ -258,6 +258,25 @@ table.list { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .about { border-top: 1px solid var(--line-strong); margin-top: 16px; padding-top: 6px; font-size: 15px; color: var(--grey); }
 .about p { margin: 8px 0; }
 
+/* ---------- squad ---------- */
+.squad-settings { border-top: 1px solid var(--line-strong); margin-top: 16px; padding-top: 10px; }
+.squad-settings h3 { display: flex; justify-content: space-between; align-items: center; font-size: 19px; font-weight: 500; margin: 6px 0; }
+.squad-settings p { font-size: 15px; margin: 6px 0 10px; }
+.field.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field.two label { display: flex; flex-direction: column; gap: 5px; font-size: 16px; font-weight: 500; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.panel.wide { width: 620px; }
+.help-body { font-size: 16px; color: var(--grey); max-height: 46vh; overflow-y: auto; margin-top: 12px; }
+.help-body ol { padding-left: 22px; }
+.help-body li { margin: 8px 0; }
+.help-body strong { color: var(--white); }
+.squad-card { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--orange); padding: 12px 14px; margin-bottom: 8px; }
+.squad-card .who { font-size: 19px; font-weight: 500; min-width: 140px; }
+.squad-card .where { flex: 1; min-width: 0; }
+.squad-card .where .srv { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.squad-card .when { font-size: 14px; color: var(--dim); }
+.squad-card.stale { opacity: 0.6; }
+
 /* ---------- toasts ---------- */
 .toasts { position: fixed; right: 16px; bottom: 44px; display: flex; flex-direction: column; gap: 8px; z-index: 20; }
 .toast {

@@ -49,6 +49,15 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false   # no paid code-signing certificate
 
+      - name: Make checksum
+        shell: pwsh
+        run: |
+          $exe = "dist/RedMarks-Wardogs-Server-Browser-Setup-${{ steps.ver.outputs.version }}.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $exe -Leaf)" | Out-File "$exe.sha256.txt" -Encoding ascii
+          echo "sha256=$hash" >> $env:GITHUB_OUTPUT
+        id: sum
+
       - name: Attach installer to this run
         uses: actions/upload-artifact@v7
         with:
@@ -65,6 +74,15 @@ jobs:
             Download **RedMarks-Wardogs-Server-Browser-Setup-${{ steps.ver.outputs.version }}.exe** below and run it.
 
             Windows may say "Windows protected your PC" because the app isn't signed with a paid certificate. Click **More info**, then **Run anyway**.
-          files: dist/RedMarks-Wardogs-Server-Browser-Setup-${{ steps.ver.outputs.version }}.exe
+
+            **Check the download is genuine (optional).** In PowerShell, run:
+            `Get-FileHash .\RedMarks-Wardogs-Server-Browser-Setup-${{ steps.ver.outputs.version }}.exe -Algorithm SHA256`
+            It should print:
+            `${{ steps.sum.outputs.sha256 }}`
+
+            This installer was built automatically by GitHub from the source code in this repository.
+          files: |
+            dist/RedMarks-Wardogs-Server-Browser-Setup-${{ steps.ver.outputs.version }}.exe
+            dist/RedMarks-Wardogs-Server-Browser-Setup-${{ steps.ver.outputs.version }}.exe.sha256.txt
           fail_on_unmatched_files: true
           make_latest: "true"

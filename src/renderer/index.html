@@ -38,6 +38,7 @@
     <button class="tab" role="tab" data-view="servers"><i class="ti ti-list" aria-hidden="true"></i> Servers</button>
     <button class="tab" role="tab" data-view="fav"><i class="ti ti-star" aria-hidden="true"></i> Favourites</button>
     <button class="tab" role="tab" data-view="regions"><i class="ti ti-world" aria-hidden="true"></i> Regions</button>
+    <button class="tab" role="tab" data-view="squad"><i class="ti ti-users-group" aria-hidden="true"></i> Squad</button>
     <button class="tab" role="tab" data-view="detail"><i class="ti ti-chart-line" aria-hidden="true"></i> Details</button>
   </nav>
 
@@ -85,10 +86,102 @@
         </select>
         <small>The server data only changes about every 5 minutes, so faster refreshing wouldn't show anything new.</small>
       </label>
+      <div class="squad-settings">
+        <h3>Squad <button class="btn small" id="squad-help-btn"><i class="ti ti-help" aria-hidden="true"></i> How to set this up</button></h3>
+        <p class="dim">Let your mates see which server you're heading to. Everything here is off until you turn it on, and nothing is shared unless you press Join.</p>
+        <label class="field">
+          <span>Your name in the squad</span>
+          <input class="input" id="squad-name" maxlength="24" placeholder="RedMark">
+        </label>
+
+        <label class="check">
+          <input type="checkbox" id="squad-discord-on">
+          <span>Discord announcements
+            <small>Posts "heading to ..." into one Discord channel. Posting only: the app can't read Discord back, so there's no squad list.</small>
+          </span>
+        </label>
+        <label class="field">
+          <span>Discord webhook link</span>
+          <input class="input" id="squad-webhook" type="password" placeholder="https://discord.com/api/webhooks/...">
+          <small>Treat this like a password. Anyone with it can post in that channel.</small>
+        </label>
+
+        <label class="check">
+          <input type="checkbox" id="squad-api-on">
+          <span>Web API on your own website
+            <small>Two-way, so the Squad tab shows who is heading where. Upload the webapi folder to your site first.</small>
+          </span>
+        </label>
+        <label class="field">
+          <span>Address of squad.php</span>
+          <input class="input" id="squad-url" placeholder="https://yoursite.com/squad/squad.php">
+        </label>
+        <div class="field two">
+          <label><span>Squad code</span><input class="input" id="squad-code" maxlength="40" placeholder="ABC123"></label>
+          <label><span>Squad key</span><input class="input" id="squad-key" type="password" maxlength="80" placeholder="the key from config.php"></label>
+        </div>
+        <label class="field">
+          <span>Invite line from a mate</span>
+          <input class="input" id="squad-invite-in" placeholder="rmwd1:..." maxlength="2000">
+          <small>Paste what they sent you, then click Use invite.</small>
+        </label>
+        <div class="btn-row">
+          <button class="btn" id="squad-create"><i class="ti ti-plus" aria-hidden="true"></i> Create squad</button>
+          <button class="btn" id="squad-copy-invite"><i class="ti ti-copy" aria-hidden="true"></i> Copy invite line</button>
+          <button class="btn" id="squad-paste-invite"><i class="ti ti-clipboard" aria-hidden="true"></i> Use invite</button>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" id="squad-announce">
+          <span>Announce automatically when I press Join
+            <small>Turn this off to stay quiet. You can still announce by hand from the Squad tab.</small>
+          </span>
+        </label>
+      </div>
+
       <div class="about">
         <p>This app only reads public server data from the Wardog Servers API (wardogservers.com). It never opens, reads or changes WARDOGS game files, and it doesn't run inside the game. Join starts WARDOGS the same way a Steam shortcut does.</p>
         <p>Ping is an estimate: it measures your connection to a large data centre in each region, because server addresses aren't public.</p>
         <p class="dim" id="about-version"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup guide -->
+  <div class="overlay" id="help" hidden>
+    <div class="panel wide" role="dialog" aria-labelledby="help-title">
+      <div class="panel-head">
+        <h2 id="help-title">Setting up squad presence</h2>
+        <button class="icon-btn" id="help-close" aria-label="Close guide"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="seg" role="group" aria-label="Guide">
+        <button id="help-tab-discord" class="on">Discord</button>
+        <button id="help-tab-api">Your own website</button>
+      </div>
+
+      <div class="help-body" id="help-discord">
+        <p>Discord announcements need no hosting. The app posts a line into one channel when you press Join. It can't read messages back, so there's no squad list in the app.</p>
+        <ol>
+          <li>In Discord, make a <strong>private channel</strong> for your crew, so only invited people see the posts.</li>
+          <li>Open <strong>Server Settings</strong>, then <strong>Integrations</strong>, then <strong>Webhooks</strong>.</li>
+          <li>Click <strong>New Webhook</strong>, pick that channel, then <strong>Copy Webhook URL</strong>.</li>
+          <li>Paste it into <strong>Discord webhook link</strong> in Settings, and tick <strong>Discord announcements</strong>.</li>
+          <li>Press Join on any server to test it.</li>
+        </ol>
+        <p class="dim">If the link ever leaks, delete the webhook in Discord and make a new one. The old link stops working straight away.</p>
+      </div>
+
+      <div class="help-body" id="help-api" hidden>
+        <p>This gives you a full Squad tab. You need web hosting that runs PHP. No database is needed.</p>
+        <ol>
+          <li>Find the <strong>webapi</strong> folder in the app's project files.</li>
+          <li>Open <strong>config.php</strong> in Notepad and replace the example key with a long random one of your own. Save it.</li>
+          <li>Upload the whole folder to your website, for example into a folder called <strong>squad</strong>.</li>
+          <li>Open <strong>check.php</strong> in your browser (yoursite.com/squad/check.php). It tells you if anything is wrong, and shows the address to use.</li>
+          <li>Paste that address into <strong>Address of squad.php</strong> here, paste the same key into <strong>Squad key</strong>, tick <strong>Web API</strong>, then click <strong>Create squad</strong>.</li>
+          <li>Click <strong>Copy invite line</strong> and send it privately to each mate. They paste it in Settings and click <strong>Use invite</strong> in their app, type their name, and they're in.</li>
+        </ol>
+        <p class="dim">Up to 30 people by default; change MAX_MEMBERS in config.php for more. Entries disappear after three hours on their own.</p>
       </div>
     </div>
   </div>

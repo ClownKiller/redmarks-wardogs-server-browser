@@ -50,6 +50,7 @@ const S = {
     fav: { col: 'players', dir: -1 },
   },
   shown: { official: PAGE_SIZE, community: PAGE_SIZE },
+  squad: { members: [], error: '', loading: false, at: 0 },
   lastRefresh: 0,
   nextRefresh: 0,
   refreshing: false,
@@ -85,7 +86,7 @@ function ago(ms) {
   const m = Math.round(s / 60);
   if (m < 60) return `${m} min ago`;
   const h = Math.floor(m / 60);
-  if (h < 48) return `${h} h ${m % 60} min ago`;
+  if (h < 48) return m % 60 ? `${h} h ${m % 60} min ago` : `${h} h ago`;
   return `${Math.floor(h / 24)} days ago`;
 }
 
@@ -197,6 +198,17 @@ async function migrateOldFavourites() {
   if (upgraded) toast(`Updated ${upgraded} saved favourite${upgraded > 1 ? 's' : ''} to the new server list.`);
 }
 
+async function loadSquad(force) {
+  if (!S.settings.squadApiOn) { S.squad = { members: [], error: '', loading: false, at: 0 }; return; }
+  S.squad.loading = true;
+  if (S.view === 'squad') renderResults();
+  const r = await rm.squadRoster({ force: Boolean(force) });
+  S.squad.loading = false;
+  if (r.ok) { S.squad.members = r.members || []; S.squad.error = ''; S.squad.at = Date.now(); }
+  else S.squad.error = r.error;
+  if (S.view === 'squad') renderResults();
+}
+
 async function loadDetail() {
   const sel = S.selected;
   if (!sel) return;
@@ -274,7 +286,7 @@ async function refreshAll() {
   if (S.refreshing) return;
   S.refreshing = true;
   $('btn-refresh').classList.add('spin');
-  await Promise.allSettled([loadSnapshot(), loadSeries()]);
+  await Promise.allSettled([loadSnapshot(), loadSeries(), loadSquad(true)]);
   if (S.selected && S.view === 'detail') await loadDetail();
   S.lastRefresh = Date.now();
   S.nextRefresh = S.lastRefresh + S.settings.refreshMinutes * 60000;
@@ -339,13 +351,21 @@ async function addByCode(input, button) {
 }
 
 /** Join: copy the join code and (if enabled) start WARDOGS through Steam. */
-async function joinServer(server) {
-  const r = await rm.join({ code: server.code });
+async function joinServer(server, quiet) {
+  const r = await rm.join({ code: server.code, serverName: server.name, region: server.region, quiet: Boolean(quiet) });
   if (!r.ok) { toast(r.error, true); return; }
   const full = server.max && server.players >= server.max;
   const fullNote = full ? ' This server is full right now, so you may be put in a queue.' : '';
-  if (r.launched) toast(`Join code copied. WARDOGS is starting: open the server browser, paste the code with Ctrl+V and join.${fullNote}`);
-  else toast(`Join code copied. Paste it into the in-game server browser with Ctrl+V.${fullNote}`);
+  if (r.launched) toast(`Join code copied. WARDOGS is starting: press Deploy, then Community, then Join By ID, and paste with Ctrl+V.${fullNote}`);
+  else toast(`Join code copied. In game: Deploy, Community, Join By ID, then paste with Ctrl+V.${fullNote}`);
+
+  const shared = r.shared;
+  if (shared) {
+    if (shared.api) { S.squad.at = 0; loadSquad(true); }
+    const where = [shared.api ? 'your squad' : null, shared.discord ? 'Discord' : null].filter(Boolean).join(' and ');
+    if (where) toast(`Told ${where} where you're heading.`);
+    (shared.errors || []).forEach((e) => toast(`Squad: ${e}`, true));
+  }
 }
 
 function openDetail(server) {
@@ -405,6 +425,7 @@ function buildView() {
   view.scrollTop = 0;
   S.builtView = S.view;
   if (S.view === 'servers') view.append(serversToolbar());
+  if (S.view === 'squad' && S.settings.squadApiOn) loadSquad(false);
   if (S.view === 'fav') view.append(favToolbar());
   view.append(el('div', { attrs: { id: 'results' } }));
   fillRegionSelects();
@@ -418,6 +439,7 @@ function renderResults() {
   if (S.view === 'servers') box.append(serversResults());
   else if (S.view === 'fav') box.append(favResults());
   else if (S.view === 'regions') box.append(regionsResults());
+  else if (S.view === 'squad') box.append(squadResults());
   else box.append(detailResults());
 }
 
@@ -809,6 +831,62 @@ function regionsResults() {
 }
 
 // ============================================================
+//  Tab: Squad
+// ============================================================
+
+function squadResults() {
+  const set = S.settings;
+  if (!set.squadApiOn && !set.squadDiscordOn) {
+    return emptyState('users-group', 'Share where you\'re heading',
+      'Squad presence lets your mates see which server you pressed Join on. Set it up with a Discord channel, or with the Web API on your own website.',
+      el('button', { class: 'btn primary', on: { click: openSettings } }, icon('settings'), 'Open settings'));
+  }
+
+  const parts = [];
+  if (set.squadDiscordOn && !set.squadApiOn) {
+    parts.push(el('div', { class: 'card note' },
+      el('p', { text: 'Discord announcements are on. The app posts where you\'re heading when you press Join, but it can\'t read Discord back, so your mates appear in the Discord channel rather than here. Turn on the Web API to get a live squad list.' }),
+      el('button', { class: 'btn', on: { click: openSettings } }, icon('settings'), 'Settings')));
+    return el('div', null, parts);
+  }
+
+  if (S.squad.error) {
+    parts.push(emptyState('alert-triangle', 'Couldn\'t reach your squad', S.squad.error,
+      el('button', { class: 'btn', on: { click: () => loadSquad(true) } }, icon('refresh'), 'Try again')));
+    return el('div', null, parts);
+  }
+  if (!S.squad.members.length) {
+    parts.push(emptyState('users-group', S.squad.loading ? 'Checking your squad…' : 'Nobody has checked in yet',
+      'Names appear here when someone in your squad presses Join. Entries disappear again after a few hours.'));
+  } else {
+    parts.push(el('div', { class: 'list-head' },
+      el('span', { class: 'section-title', style: { margin: '0' } }, icon('users-group'), ' Your squad'),
+      el('span', { class: 'dim', text: `${S.squad.members.length} checked in` })));
+    const sorted = S.squad.members.slice().sort((a, b) => b.at - a.at);
+    for (const m of sorted) {
+      const live = m.code ? S.byCode.get(m.code) : null;
+      const stale = Date.now() - m.at > 60 * 60 * 1000;
+      const where = el('div', { class: 'where' },
+        el('div', { class: 'srv', text: m.serverName || (m.code ? `Join code ${m.code}` : 'Unknown server') }),
+        el('div', { class: 'when' },
+          `heading there ${ago(m.at)}`,
+          m.region ? ` · ${regionName(m.region)}` : '',
+          live ? ` · ${live.players} / ${live.max} players${live.map ? ' · ' + live.map : ''}` : (m.code ? ' · that server is offline now' : '')));
+      parts.push(el('div', { class: `squad-card${stale ? ' stale' : ''}` },
+        el('div', { class: 'who', text: m.name }),
+        where,
+        live ? el('button', { class: 'btn small', on: { click: () => openDetail(live) } }, icon('chart-line'), 'Details') : null,
+        m.code ? joinButton(live || { code: m.code, name: m.serverName, region: m.region }) : null));
+    }
+  }
+
+  parts.push(el('div', { class: 'note card' },
+    el('p', { text: 'Squad mates show the server they pressed Join on, not where they are now: the app never reads the game. Use Steam\'s friends list to drop straight in beside someone already playing.' }),
+    el('button', { class: 'btn', on: { click: async () => { const r = await rm.squadLeave(); if (r.ok !== false) { toast('Removed your name from the squad list'); loadSquad(true); } } } }, icon('user-off'), 'Remove me from the list')));
+  return el('div', null, parts);
+}
+
+// ============================================================
 //  Tab: Details
 // ============================================================
 
@@ -946,6 +1024,14 @@ function openSettings() {
   fillRegionSelects();
   $('set-refresh').value = String(S.settings.refreshMinutes);
   $('set-launch').checked = S.settings.launchGame;
+  $('squad-name').value = S.settings.squadName || '';
+  $('squad-webhook').value = S.settings.squadWebhook || '';
+  $('squad-url').value = S.settings.squadApiUrl || '';
+  $('squad-code').value = S.settings.squadCode || '';
+  $('squad-key').value = S.settings.squadKey || '';
+  $('squad-discord-on').checked = S.settings.squadDiscordOn;
+  $('squad-api-on').checked = S.settings.squadApiOn;
+  $('squad-announce').checked = S.settings.squadAnnounce;
   $('settings').hidden = false;
   $('set-home').focus();
 }
@@ -989,7 +1075,10 @@ function wireFrame() {
     renderStatus();
   });
 
+  wireSquadSettings();
+
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('help').hidden) { $('help').hidden = true; return; }
     if (e.key === 'Escape' && !$('settings').hidden) closeSettings();
     if (e.key === 'F5') { e.preventDefault(); refreshAll(); }
   });
@@ -998,6 +1087,81 @@ function wireFrame() {
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => { if (S.view === 'detail' || S.view === 'regions') renderResults(); }, 200);
+  });
+}
+
+/** Save one squad setting and report any problem with what was typed. */
+async function saveSquad(patch, okMessage) {
+  const r = await rm.squadSave(patch);
+  if (!r.ok) { toast(r.error, true); return false; }
+  S.settings = r.settings;
+  if (okMessage) toast(okMessage);
+  return true;
+}
+
+function wireSquadSettings() {
+  const help = $('help');
+  $('squad-help-btn').addEventListener('click', () => { help.hidden = false; });
+  $('help-close').addEventListener('click', () => { help.hidden = true; });
+  help.addEventListener('click', (e) => { if (e.target.id === 'help') help.hidden = true; });
+  const showHelp = (api) => {
+    $('help-discord').hidden = api;
+    $('help-api').hidden = !api;
+    $('help-tab-discord').classList.toggle('on', !api);
+    $('help-tab-api').classList.toggle('on', api);
+  };
+  $('help-tab-discord').addEventListener('click', () => showHelp(false));
+  $('help-tab-api').addEventListener('click', () => showHelp(true));
+
+  $('squad-name').addEventListener('change', (e) => saveSquad({ name: e.target.value }));
+  $('squad-webhook').addEventListener('change', async (e) => {
+    if (!await saveSquad({ webhook: e.target.value })) e.target.value = S.settings.squadWebhook || '';
+  });
+  $('squad-url').addEventListener('change', async (e) => {
+    if (!await saveSquad({ apiUrl: e.target.value })) e.target.value = S.settings.squadApiUrl || '';
+  });
+  $('squad-code').addEventListener('change', (e) => saveSquad({ code: e.target.value }));
+  $('squad-key').addEventListener('change', (e) => saveSquad({ key: e.target.value }));
+  $('squad-announce').addEventListener('change', (e) => saveSquad({ announce: e.target.checked }));
+
+  $('squad-discord-on').addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    if (on && !$('squad-webhook').value.trim()) { toast('Paste your Discord webhook link first.', true); e.target.checked = false; return; }
+    if (on && !$('squad-name').value.trim()) { toast('Type the name you want your mates to see.', true); e.target.checked = false; return; }
+    await saveSquad({ discordOn: on });
+  });
+  $('squad-api-on').addEventListener('change', async (e) => {
+    const on = e.target.checked;
+    if (on && !$('squad-url').value.trim()) { toast('Add your website address first. The guide shows how.', true); e.target.checked = false; return; }
+    if (on && !$('squad-name').value.trim()) { toast('Type the name you want your mates to see.', true); e.target.checked = false; return; }
+    if (!await saveSquad({ apiOn: on })) { e.target.checked = !on; return; }
+    loadSquad(true);
+  });
+
+  $('squad-create').addEventListener('click', async () => {
+    const r = await rm.squadCreate({ squadName: '' });
+    if (!r.ok) { toast(r.error, true); return; }
+    S.settings = r.settings;
+    $('squad-code').value = S.settings.squadCode;
+    $('squad-key').value = S.settings.squadKey;
+    toast('Squad created. Put the same key into config.php on your website, then send mates the invite line.');
+  });
+  $('squad-copy-invite').addEventListener('click', async () => {
+    const r = await rm.squadInvite();
+    if (!r.ok) { toast(r.error, true); return; }
+    await rm.copy({ text: r.invite });
+    toast('Invite line copied. Send it privately: it contains your squad key.');
+  });
+  $('squad-paste-invite').addEventListener('click', async () => {
+    const line = $('squad-invite-in').value.trim();
+    if (!line) { toast('Paste the invite line into the box above first.', true); $('squad-invite-in').focus(); return; }
+    const r = await rm.squadJoin({ line });
+    if (!r.ok) { toast(r.error, true); return; }
+    S.settings = r.settings;
+    $('squad-invite-in').value = '';
+    openSettings();
+    toast('Squad joined. Type your name above if you haven\'t already.');
+    loadSquad(true);
   });
 }
 

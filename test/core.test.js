@@ -10,6 +10,7 @@ const path = require('path');
 const { WardogsApi, cleanCode, isJoinCode, modeLabel, slim, retryAfterMs, MAX_PER_MINUTE } = require('../src/main/api');
 const { regionGroup } = require('../src/main/ping');
 const { Store, MAX_FAVOURITES } = require('../src/main/store');
+const { Squad, newSquad, makeInvite, readInvite, checkApiUrl, checkWebhook, cleanName } = require('../src/main/squad');
 
 /** A fake clock + fake internet, so tests run instantly and offline. */
 function harness(responder) {
@@ -209,4 +210,127 @@ test('favourites and settings save and load', () => {
 
   fs.writeFileSync(path.join(dir, 'favourites.json'), '{broken');
   assert.deepStrictEqual(store.listFavourites(), [], 'a damaged file does not crash the app');
+});
+
+// ---------- squad presence ----------
+
+/** A fake squad website + Discord, so these tests run offline. */
+function squadHarness(settings, responder) {
+  const calls = [];
+  const squad = new Squad({
+    userAgent: 'test',
+    now: () => Date.now(),
+    getSettings: () => settings,
+    fetchImpl: async (url, opts) => {
+      const body = JSON.parse(opts.body);
+      calls.push({ url, body });
+      const r = (responder || (() => ({ status: 200, body: { ok: true } })))(url, body, calls.length);
+      return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.body };
+    },
+  });
+  return { squad, calls };
+}
+
+const SQUAD_SETTINGS = {
+  squadName: 'RedMark', squadApiUrl: 'https://example.com/squad/squad.php',
+  squadCode: 'ABC123', squadKey: 'KEY1234567890', squadWebhook: 'https://discord.com/api/webhooks/1/abc',
+  squadApiOn: true, squadDiscordOn: true,
+};
+
+test('an invite line survives a round trip and carries the key', () => {
+  const made = newSquad('Dogs of War');
+  assert.strictEqual(made.squadCode.length, 6);
+  assert.ok(made.squadKey.length >= 16, 'the key is long enough to act as a password');
+  const line = makeInvite({ apiUrl: 'https://example.com/squad/squad.php', ...made });
+  const back = readInvite(`here you go mate: ${line}  `);
+  assert.strictEqual(back.squadCode, made.squadCode);
+  assert.strictEqual(back.squadKey, made.squadKey);
+  assert.strictEqual(back.apiUrl, 'https://example.com/squad/squad.php');
+});
+
+test('bad invites and addresses are refused with plain-English errors', () => {
+  assert.throws(() => readInvite('hello'), /isn't a squad invite/);
+  assert.throws(() => readInvite('rmwd1:not-base64!!'), /damaged/);
+  assert.throws(() => checkApiUrl('http://someone.com/squad.php'), /https/);
+  assert.throws(() => checkApiUrl('not a url'), /doesn't look right/);
+  assert.throws(() => checkWebhook('https://evil.example/api/webhooks/1/2'), /isn't a Discord webhook/);
+  assert.ok(checkWebhook('https://discord.com/api/webhooks/1/abc').startsWith('https://discord.com/'));
+  assert.strictEqual(checkApiUrl('http://192.168.0.5/squad.php').startsWith('http://192.168'), true, 'a home network address is allowed');
+  assert.strictEqual(cleanName('  <b>Red</b>Mark  '), 'bRed/bMark');
+});
+
+test('announcing posts to both the website and Discord', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS });
+  const out = await h.squad.announce({ code: '0712345', name: 'Official #412', region: 'oceania' });
+  assert.deepStrictEqual([out.api, out.discord], [true, true]);
+  assert.strictEqual(h.calls[0].body.action, 'checkin');
+  assert.strictEqual(h.calls[0].body.code, '0712345');
+  assert.strictEqual(h.calls[0].body.key, 'KEY1234567890');
+  assert.match(h.calls[1].body.content, /RedMark/);
+  assert.match(h.calls[1].body.content, /0712345/);
+  assert.deepStrictEqual(h.calls[1].body.allowed_mentions, { parse: [] }, 'announcements never ping anyone');
+});
+
+test('nothing is shared when squad sharing is switched off', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS, squadApiOn: false, squadDiscordOn: false });
+  const out = await h.squad.announce({ code: '0712345', name: 'A', region: 'oceania' });
+  assert.deepStrictEqual([out.api, out.discord], [false, false]);
+  assert.strictEqual(h.calls.length, 0, 'no requests at all');
+});
+
+test('a server with no join code is never announced', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS });
+  await h.squad.announce({ code: 'nonsense; drop', name: 'A' });
+  assert.strictEqual(h.calls.length, 0);
+});
+
+test('the same server is not announced twice in a row', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS });
+  await h.squad.announce({ code: '0712345', name: 'A' });
+  const again = await h.squad.announce({ code: '0712345', name: 'A' });
+  assert.ok(again.skipped, 'repeat suppressed');
+  assert.strictEqual(h.calls.length, 2, 'only the first announcement went out');
+  await h.squad.announce({ code: '0712999', name: 'B' });
+  assert.strictEqual(h.calls.length, 4, 'a different server does announce');
+});
+
+test('one side failing does not stop the other', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS }, (url) => (url.includes('discord') ? { status: 500 } : { status: 200, body: { ok: true } }));
+  const out = await h.squad.announce({ code: '0712345', name: 'A' });
+  assert.strictEqual(out.api, true);
+  assert.strictEqual(out.discord, false);
+  assert.match(out.errors[0], /Discord/);
+});
+
+test('the roster is cleaned up before the screen sees it', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS }, () => ({
+    status: 200,
+    body: { ok: true, members: [
+      { name: '<b>Mate</b>', code: '0712345', serverName: 'Official #412', region: 'oceania', ageSeconds: 120 },
+      { name: 'Dodgy', code: 'rm -rf /', serverName: 'x', region: 'y', ageSeconds: 0 },
+    ] },
+  }));
+  const r = await h.squad.getRoster(true);
+  assert.strictEqual(r.members[0].name, 'bMate/b');
+  assert.ok(r.members[0].at < Date.now() - 100000, 'age turned into a time');
+  assert.strictEqual(r.members[1].code, null, 'a bogus join code is dropped');
+});
+
+test('a refused key gives an error worth reading', async () => {
+  const h = squadHarness({ ...SQUAD_SETTINGS }, () => ({ status: 403, body: { ok: false } }));
+  await assert.rejects(h.squad.getRoster(true), /refused/);
+});
+
+test('squad settings are saved and tidied', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-squad-'));
+  const store = new Store(dir);
+  const s = store.getSettings();
+  assert.strictEqual(s.squadApiOn, false);
+  assert.strictEqual(s.squadDiscordOn, false);
+  assert.strictEqual(s.squadAnnounce, true);
+  store.saveSettings({ squadName: 'RedMark', squadKey: 'x'.repeat(400), squadApiOn: 'yes' });
+  const after = new Store(dir).getSettings();
+  assert.strictEqual(after.squadName, 'RedMark');
+  assert.strictEqual(after.squadKey.length, 300, 'over-long values are trimmed');
+  assert.strictEqual(after.squadApiOn, true);
 });

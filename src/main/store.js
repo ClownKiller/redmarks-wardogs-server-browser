@@ -19,6 +19,15 @@ const DEFAULT_SETTINGS = {
   onlyWithSpace: false,
   hideEmpty: false,
   launchGame: true,        // Join button also starts WARDOGS through Steam
+  // Squad presence (all off until the user sets it up)
+  squadName: '',           // the name shown to squad mates
+  squadApiUrl: '',         // address of squad.php on the user's own website
+  squadCode: '',           // which squad on that website
+  squadKey: '',            // shared key, works like a password
+  squadWebhook: '',        // Discord webhook link
+  squadApiOn: false,
+  squadDiscordOn: false,
+  squadAnnounce: true,     // announce automatically when Join is pressed
 };
 
 class JsonFile {
@@ -129,6 +138,12 @@ class Store {
     s.onlyWithSpace = Boolean(s.onlyWithSpace);
     s.hideEmpty = Boolean(s.hideEmpty);
     s.launchGame = Boolean(s.launchGame);
+    for (const k of ['squadName', 'squadApiUrl', 'squadCode', 'squadKey', 'squadWebhook']) {
+      s[k] = typeof s[k] === 'string' ? s[k].slice(0, 300) : '';
+    }
+    s.squadApiOn = Boolean(s.squadApiOn);
+    s.squadDiscordOn = Boolean(s.squadDiscordOn);
+    s.squadAnnounce = Boolean(s.squadAnnounce);
     return s;
   }
 
